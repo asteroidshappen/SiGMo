@@ -196,7 +196,7 @@ class Galaxy:
                  mhalo: float = 1.e12,
                  mstar: float = 1.e9,
                  mout: float = 0.,
-                 name: str ='Test_Gal',
+                 name: str = 'Test_Gal',
                  rsSFR: float = 0.,
                  SFE: float = 0.3,
                  SFR: float = 0.,
@@ -324,20 +324,20 @@ class Galaxy:
         # update the time-variable quantities involved, in this case sSFR (and through it rsSFR)
         self.update_sSFR()
 
-        # compute current fractions of how inflows are distributed
+        # (compute and) update current fractions of how inflows are distributed
         self.update_fstar()
         self.update_fout()
         self.update_fgas()
 
         # updating the change rates for stars, outflows and gas reservoir
-        self.SFR = self.fstar * self.accretionrate
-        self.MLR = self.fout * self.accretionrate
-        self.GCR = self.fgas * self.accretionrate
+        self.update_SFR()
+        self.update_MLR()
+        self.update_GCR()
 
         # update stellar mass, gas mass and ejected mass
-        self.mstar += self.SFR * timestep
-        self.mout += self.MLR * timestep
-        self.mgas += self.GCR * timestep
+        self.update_mstar(timestep=timestep)
+        self.update_mout(timestep=timestep)
+        self.update_mgas(timestep=timestep)
 
         return
 
@@ -419,6 +419,76 @@ class Galaxy:
         return sMIR * BDR * fgal
 
 
+    # GCR
+    def update_GCR(self, *args, **kwargs) -> float:
+        self.GCR = self.compute_GCR(*args, **kwargs)
+        return self.GCR
+
+    def compute_GCR(self,
+                    accretionrate: float = None,
+                    fgas: float = None
+                    ) -> float:
+        """Compute (reservoir) gas change rate from fractions in Lilly+13 ideal regulator"""
+        accretionrate = self.accretionrate if accretionrate is None else accretionrate
+        fgas = self.fgas if fgas is None else fgas
+
+        return fgas * accretionrate
+
+
+    # mgas
+    def update_mgas(self, timestep: float, *args, **kwargs) -> float:
+        self.mgas = self.compute_mgas(timestep=timestep, *args, **kwargs)
+        return self.mgas
+
+    def compute_mgas(self,
+                      timestep: float,
+                      GCR: float = None,) -> float:
+        GCR = self.GCR if GCR is None else GCR
+
+        return GCR * timestep
+
+
+    # MLR
+    def update_MLR(self, *args, **kwargs) -> float:
+        self.MLR = self.compute_MLR(*args, **kwargs)
+        return self.MLR
+
+    def compute_MLR(self,
+                    accretionrate: float = None,
+                    fout: float = None
+                    ) -> float:
+        """Compute mass loss rate from fractions in Lilly+13 ideal regulator"""
+        accretionrate = self.accretionrate if accretionrate is None else accretionrate
+        fout = self.fout if fout is None else fout
+
+        return fout * accretionrate
+
+
+    # mout
+    def update_mout(self, timestep: float, *args, **kwargs) -> float:
+        self.mout = self.compute_mout(timestep=timestep, *args, **kwargs)
+        return self.mout
+
+    def compute_mout(self,
+                      timestep: float,
+                      MLR: float = None,) -> float:
+        MLR = self.MLR if MLR is None else MLR
+
+        return MLR * timestep
+
+
+    # mstar
+    def update_mstar(self, timestep: float, *args, **kwargs) -> float:
+        self.mstar = self.compute_mstar(timestep=timestep, *args, **kwargs)
+        return self.mstar
+
+    def compute_mstar(self,
+                      timestep: float,
+                      SFR: float = None,) -> float:
+        SFR = self.SFR if SFR is None else SFR
+
+        return SFR * timestep
+
     # rsSFR
     def update_rsSFR(self, *args, **kwargs) -> float:
         self.rsSFR = self.compute_rsSFR(*args, **kwargs)
@@ -438,6 +508,21 @@ class Galaxy:
         else:
             return 0.3 * (10**10.5 / mstar)**(0.1) * (1 + z)**(5/3) #* 10**(-9)
 
+
+    # SFR
+    def update_SFR(self, *args, **kwargs) -> float:
+        self.SFR = self.compute_SFR(*args, **kwargs)
+        return self.accretionrate
+
+    def compute_SFR(self,
+                    accretionrate: float = None,
+                    fstar: float = None
+                    ) -> float:
+        """Compute star formation rate from fractions in Lilly+13 ideal regulator"""
+        accretionrate = self.accretionrate if accretionrate is None else accretionrate
+        fstar = self.fstar if fstar is None else fstar
+
+        return fstar * accretionrate
 
     # sMIR
     def update_sMIR(self, *args, **kwargs) -> float:
