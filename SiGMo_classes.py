@@ -124,7 +124,7 @@ class Galaxy:
     env : Environment
         The environment object the galaxy is associated with/located in
     accretionrate : float, optional
-        The accretion rate of galaxy (default 1.e1)
+        The accretion rate of galaxy (default 1.)
     BDR : float, optional
         The ratio of (gaseous) baryonic to dark matter entering the halo (default 0.2)
     fgal : float, optional
@@ -181,7 +181,7 @@ class Galaxy:
 
     def __init__(self,
                  env: Environment,
-                 accretionrate: float =1.e1,
+                 accretionrate: float = 1.,
                  BDR: float = 0.2,
                  fgal: float = 1.,
                  fgas: float = None,
@@ -321,7 +321,9 @@ class Galaxy:
         # update the redshift of the galaxy to the environment's z
         self.z = self.env.z
 
-        # update the time-variable quantities involved, in this case sSFR (and through it rsSFR)
+        # update the time-variable quantities involved, in this case
+        # accretionrate (and through is sMIR) and sSFR (and through it rsSFR)
+        self.update_accretionrate()
         self.update_sSFR()
 
         # (compute and) update current fractions of how inflows are distributed
@@ -338,6 +340,9 @@ class Galaxy:
         self.update_mstar(timestep=timestep)
         self.update_mout(timestep=timestep)
         self.update_mgas(timestep=timestep)
+        # ===================
+        # UPDATING mhalo GOES HERE !!!
+        # ===================
 
         return
 
@@ -403,7 +408,10 @@ class Galaxy:
 
 
     # accretionrate
-    def update_accretionrate(self, *args, **kwargs) -> float:
+    def update_accretionrate(self, sMIR: float = None, *args, **kwargs) -> float:
+        if sMIR is None:
+            self.update_sMIR()
+
         self.accretionrate = self.compute_accretionrate()
         return self.accretionrate
 
@@ -536,7 +544,7 @@ class Galaxy:
         """Computes the specific Mass Increase Rate of the DM halo
         accoding to Lilly et al. 2013, Eq. (3), more precise version"""
         mhalo = self.mhalo if mhalo is None else mhalo
-        z = self.z if z in None else z
+        z = self.z if z is None else z
 
         return 0.027 * (mhalo / 10**12)**(0.15) * (1 + z + 0.1*((1 + z)**(-1.25)))**2.5
 

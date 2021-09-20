@@ -32,22 +32,29 @@ def testrun_1(timestep: float = 1.e-3, silent: bool = False):
         print(GalA1)
 
 
+    # timesteps list for plotting
     timesteps_l = np.linspace(0, len(GalA1_history) * timestep, len(GalA1_history))
+
+    # grad the data we want to plot from history of galaxy
     mgas_l = [GalA1_history[i]['mgas'] for i, item in enumerate(GalA1_history)]
     mstar_l = [GalA1_history[i]['mstar'] for i, item in enumerate(GalA1_history)]
     mout_l = [GalA1_history[i]['mout'] for i, item in enumerate(GalA1_history)]
+    accretionrate_l = [GalA1_history[i]['accretionrate'] for i, item in enumerate(GalA1_history)]
+
     fig, ax = plt.subplots(figsize=(9,6))
-    ax.plot(timesteps_l, mgas_l)
-    # ax.plot(timesteps_l, mstar_l)
-    # ax.plot(timesteps_l, mout_l)
-    # ax.set_yscale('log')
+    # ax.plot(timesteps_l, mgas_l, label="mgas")
+    # ax.plot(timesteps_l, mstar_l, label="mstar")
+    # ax.plot(timesteps_l, mout_l, label="mout")
+    ax.plot(timesteps_l, accretionrate_l, label="accretionrate")
+    ax.set_yscale('log')
+    ax.legend()
     fig.show()
 
     return
 
 
 def main():
-    testrun_1()
+    testrun_1(silent=True)
     return
 
 
