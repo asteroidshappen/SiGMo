@@ -132,6 +132,9 @@ class Galaxy:
         The gas accretion rate of the galaxy (default 1.e12)
     GCR : float, optional
         The change rate ∂/∂t in gas mass content of the galaxy (default 0.)
+    HLF : float, optional
+        The halo loss fraction - fraction of baryons that get expelled by feedback
+        not only from the galaxy but also from the galaxy together (default 0.1)
     IRF: float, optional
         The fraction of gas being converted to stars that is promptly,
         here instantly, returned to the gas reservoir (default 0.4)
@@ -191,6 +194,7 @@ class Galaxy:
                  GAR: float = 1.e12,
                  gasmassfraction: float = 1.,
                  GCR: float = 0.,
+                 HLF: float = 0.1,
                  IRF: float = 0.4,
                  MIR: float = 0.,
                  MLF: float = 0.1,
@@ -215,6 +219,7 @@ class Galaxy:
         self.fstar =fstar
         self.GAR = GAR
         self.GCR = GCR
+        self.HLF = HLF
         self.IRF = IRF
         self.MIR = MIR
         self.MLF = MLF
@@ -326,7 +331,8 @@ class Galaxy:
         self.z = self.env.z
 
         # update the time-variable quantities involved, in this case
-        # GAR (and through is sMIR) and sSFR (and through it rsSFR)
+        # GAR (and through it MIR and through the latter sMIR)
+        # and sSFR (and through it rsSFR)
         self.update_GAR()
         self.update_sSFR()
 
@@ -344,9 +350,8 @@ class Galaxy:
         self.update_mstar(timestep=timestep)
         self.update_mout(timestep=timestep)
         self.update_mgas(timestep=timestep)
-        # ===================
-        # UPDATING mhalo GOES HERE !!!
-        # ===================
+        # also update total halo mass
+        self.update_mhalo(timestep=timestep)
 
         return
 
@@ -467,6 +472,31 @@ class Galaxy:
         GCR = self.GCR if GCR is None else GCR
 
         return GCR * timestep
+
+
+    # mhalo
+    def update_mhalo(self, timestep: float, *args, **kwargs) -> float:
+        """Update the halo mass using the compute_mhalo() method"""
+        self.mhalo = self.compute_mhalo(timestep, *args, **kwargs)
+        return self.mhalo
+
+    def compute_mhalo(self,
+                      timestep: float,
+                      HLF: float = None,
+                      mhalo: float = None,
+                      mout: float = None,
+                      MIR: float = None,
+                      ) -> float:
+        """Compute new halo mass based on previous mhalo, mass increase rate
+        and time step (integration), as well as precomputed (already integrated)
+        baryonic mass loss from the galaxy into the halo and the fraction of
+        which is also fully lost from the halo"""
+        HLF = self.HLF if HLF is None else HLF
+        mhalo = self.mhalo if mhalo is None else mhalo
+        mout = self.mout if mout is None else mout
+        MIR = self.MIR if MIR is None else MIR
+
+        return mhalo + (MIR * timestep) - (HLF * mout)
 
 
     # MIR
