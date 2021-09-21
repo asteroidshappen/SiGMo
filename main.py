@@ -39,13 +39,13 @@ def testrun_1(timestep: float = 1.e-3, silent: bool = False):
     mgas_l = [GalA1_history[i]['mgas'] for i, item in enumerate(GalA1_history)]
     mstar_l = [GalA1_history[i]['mstar'] for i, item in enumerate(GalA1_history)]
     mout_l = [GalA1_history[i]['mout'] for i, item in enumerate(GalA1_history)]
-    accretionrate_l = [GalA1_history[i]['accretionrate'] for i, item in enumerate(GalA1_history)]
+    GAR_L = [GalA1_history[i]['GAR'] for i, item in enumerate(GalA1_history)]
 
     fig, ax = plt.subplots(figsize=(9,6))
     # ax.plot(timesteps_l, mgas_l, label="mgas")
     # ax.plot(timesteps_l, mstar_l, label="mstar")
     # ax.plot(timesteps_l, mout_l, label="mout")
-    ax.plot(timesteps_l, accretionrate_l, label="accretionrate")
+    ax.plot(timesteps_l, GAR_L, label="GAR (gas accretion rate)")
     ax.set_yscale('log')
     ax.legend()
     fig.show()

@@ -123,18 +123,20 @@ class Galaxy:
     ----------
     env : Environment
         The environment object the galaxy is associated with/located in
-    accretionrate : float, optional
-        The accretion rate of galaxy (default 1.)
     BDR : float, optional
         The ratio of (gaseous) baryonic to dark matter entering the halo (default 0.2)
     fgal : float, optional
         The fraction of baryons that enter the halo and make it all the way down
         into the "regulator system" to participate in star formation etc
+    GAR : float, optional
+        The gas accretion rate of the galaxy (default 1.e12)
     GCR : float, optional
         The change rate ∂/∂t in gas mass content of the galaxy (default 0.)
     IRF: float, optional
         The fraction of gas being converted to stars that is promptly,
         here instantly, returned to the gas reservoir (default 0.4)
+    MIR : float, optional
+        The mass increase rate (accretion) of the DM halo with mass mhalo (default 0.)
     MLF : float, optional
         The mass-loading factor coupling SFR and mass loss (default 0.1)
     MLR : float, optional
@@ -156,7 +158,7 @@ class Galaxy:
     SFR : float, optional
         The star formation rate in the galaxy (default 0.)
     sMIR : float, optional
-        The specific Mass Increase Rate (accretion) of the DM halo (default 0.)
+        The specific mass increase rate (accretion) of the DM halo (default 0.)
     sSFR: float, optional
         The actual specific star formation rate; this sSFR does not account
         for reduction by the inst. return to the gas reservoir (default 0.)
@@ -181,15 +183,16 @@ class Galaxy:
 
     def __init__(self,
                  env: Environment,
-                 accretionrate: float = 1.,
                  BDR: float = 0.2,
                  fgal: float = 1.,
                  fgas: float = None,
                  fout: float = None,
                  fstar: float = None,
+                 GAR: float = 1.e12,
                  gasmassfraction: float = 1.,
                  GCR: float = 0.,
                  IRF: float = 0.4,
+                 MIR: float = 0.,
                  MLF: float = 0.1,
                  MLR: float = 0.,
                  mgas: float = 1.e10,
@@ -205,14 +208,15 @@ class Galaxy:
                  z: float = None
                  ):
         self.env = env
-        self.accretionrate = accretionrate
         self.BDR = BDR
         self.fgal = fgal
         self.fgas = fgas
         self.fout = fout
         self.fstar =fstar
+        self.GAR = GAR
         self.GCR = GCR
         self.IRF = IRF
+        self.MIR = MIR
         self.MLF = MLF
         self.MLR = MLR
         self.mgas = mgas
@@ -322,8 +326,8 @@ class Galaxy:
         self.z = self.env.z
 
         # update the time-variable quantities involved, in this case
-        # accretionrate (and through is sMIR) and sSFR (and through it rsSFR)
-        self.update_accretionrate()
+        # GAR (and through is sMIR) and sSFR (and through it rsSFR)
+        self.update_GAR()
         self.update_sSFR()
 
         # (compute and) update current fractions of how inflows are distributed
@@ -407,24 +411,33 @@ class Galaxy:
     #         return gmf
 
 
-    # accretionrate
-    def update_accretionrate(self, sMIR: float = None, *args, **kwargs) -> float:
-        if sMIR is None:
-            self.update_sMIR()
+    # GAR
+    def update_GAR(self, MIR: float = None, *args, **kwargs) -> float:
+        """Updates the (absolute) gas accretion rate of the galaxy
+        and calls compute_GAR() to get the new value. If the overall
+        halo mass increase rate (MIR) is not provided, it also calls
+        update_MIR() to compute the current value of that."""
+        if MIR is None:
+            self.update_MIR()
 
-        self.accretionrate = self.compute_accretionrate()
-        return self.accretionrate
+        self.GAR = self.compute_GAR()
+        return self.GAR
 
-    def compute_accretionrate(self,
-                              sMIR: float = None,
-                              BDR: float = None,
-                              fgal: float = None
-                              ) -> float:
-        sMIR = self.sMIR if sMIR is None else sMIR
+    def compute_GAR(self,
+                    MIR: float = None,
+                    BDR: float = None,
+                    fgal: float = None
+                    ) -> float:
+        """Compute the absolute gas accretion rate of the galaxy
+        from the overall halo mass increase rate (MIR) as well as
+        the baryon-dark matter ratio (BDR) and the fraction of
+        infalling gas that makes it deep enough into the galaxy
+        to participate in star formation etc."""
+        MIR = self.MIR if MIR is None else MIR
         BDR = self.BDR if BDR is None else BDR
         fgal = self.fgal if fgal is None else fgal
 
-        return sMIR * BDR * fgal
+        return MIR * BDR * fgal
 
 
     # GCR
@@ -433,14 +446,14 @@ class Galaxy:
         return self.GCR
 
     def compute_GCR(self,
-                    accretionrate: float = None,
+                    GAR: float = None,
                     fgas: float = None
                     ) -> float:
         """Compute (reservoir) gas change rate from fractions in Lilly+13 ideal regulator"""
-        accretionrate = self.accretionrate if accretionrate is None else accretionrate
+        GAR = self.GAR if GAR is None else GAR
         fgas = self.fgas if fgas is None else fgas
 
-        return fgas * accretionrate
+        return fgas * GAR
 
 
     # mgas
@@ -456,20 +469,38 @@ class Galaxy:
         return GCR * timestep
 
 
+    # MIR
+    def update_MIR(self, sMIR: float = None, *args, **kwargs) -> float:
+        if sMIR is None:
+            self.update_sMIR()
+
+        self.MIR = self.compute_MIR(*args, **kwargs)
+        return self.MIR
+
+    def compute_MIR(self,
+                    mhalo: float = None,
+                    sMIR: float = None
+                    ) -> float:
+        mhalo = self.mhalo if mhalo is None else mhalo
+        sMIR = self.sMIR if sMIR is None else sMIR
+
+        return sMIR * mhalo
+
+
     # MLR
     def update_MLR(self, *args, **kwargs) -> float:
         self.MLR = self.compute_MLR(*args, **kwargs)
         return self.MLR
 
     def compute_MLR(self,
-                    accretionrate: float = None,
+                    GAR: float = None,
                     fout: float = None
                     ) -> float:
         """Compute mass loss rate from fractions in Lilly+13 ideal regulator"""
-        accretionrate = self.accretionrate if accretionrate is None else accretionrate
+        GAR = self.GAR if GAR is None else GAR
         fout = self.fout if fout is None else fout
 
-        return fout * accretionrate
+        return fout * GAR
 
 
     # mout
@@ -520,17 +551,18 @@ class Galaxy:
     # SFR
     def update_SFR(self, *args, **kwargs) -> float:
         self.SFR = self.compute_SFR(*args, **kwargs)
-        return self.accretionrate
+        return self.GAR
 
     def compute_SFR(self,
-                    accretionrate: float = None,
+                    GAR: float = None,
                     fstar: float = None
                     ) -> float:
         """Compute star formation rate from fractions in Lilly+13 ideal regulator"""
-        accretionrate = self.accretionrate if accretionrate is None else accretionrate
+        GAR = self.GAR if GAR is None else GAR
         fstar = self.fstar if fstar is None else fstar
 
-        return fstar * accretionrate
+        return fstar * GAR
+
 
     # sMIR
     def update_sMIR(self, *args, **kwargs) -> float:
