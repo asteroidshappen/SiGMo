@@ -246,7 +246,7 @@ class Galaxy:
 
 
     # ------------------------------
-    # time integration of the system
+    # time integration of the system (reference method by Lilly+13, "ideal regulator")
 
     # This is the reference model from Lilly et al. 2013, ideal case
     # based on Eqns. (12a), (13a), (14a)
@@ -334,7 +334,7 @@ class Galaxy:
         # GAR (and through it MIR and through the latter sMIR)
         # and sSFR (and through it rsSFR)
         self.update_GAR()
-        self.update_sSFR()
+        self.update_sSFR(mode='from rsSFR')
 
         # (compute and) update current fractions of how inflows are distributed
         self.update_fstar()
@@ -355,6 +355,52 @@ class Galaxy:
 
         return
 
+
+    # ------------------------------
+    # time integration of the system - intuitive method without z-dependent sSFR as input
+
+    def intuitive_evolve(self,
+                         timestep: float = 1.e-3
+                         ):
+        """Evolves the galaxy by one timestep intuitively, *without* using
+        sSFR(mstar, z) as time-dependent input (like Lilly+13 do)"""
+        # update the redshift of the galaxy to the environment's z
+        self.z = self.env.z
+
+        # update the time-variable quantities involved, in this case
+        # GAR (and through it MIR and through the latter sMIR)
+        self.update_GAR()
+
+
+        # FRACTIONS fstar, fout, fgas NOT NEEDED IN INTUITIVE MODEL ANYMORE -
+        # maybe compute afterwards for comparison with 'reference_evolve()'?
+        # # (compute and) update current fractions of how inflows are distributed
+        # self.update_fstar()
+        # self.update_fout()
+        # self.update_fgas()
+
+        # updating the change rates for stars, outflows and gas reservoir
+        self.update_SFR()
+        self.update_MLR()
+        self.update_GCR()
+
+        # update stellar mass, gas mass and ejected mass
+        self.update_mstar(timestep=timestep)
+        self.update_mout(timestep=timestep)
+        self.update_mgas(timestep=timestep)
+        # also update total halo mass
+        self.update_mhalo(timestep=timestep)
+
+        # update some derived quantities, here sSFR (and through it rsSFR)
+        self.update_sSFR(mode='from SFR')
+
+        return
+
+
+
+
+
+    # make snapshot of the system
 
     def make_snapshot(self):
         """Returns the current values of all major attributes as dict"""
@@ -559,14 +605,23 @@ class Galaxy:
         return SFR * timestep
 
     # rsSFR
-    def update_rsSFR(self, *args, **kwargs) -> float:
-        self.rsSFR = self.compute_rsSFR(*args, **kwargs)
+    def update_rsSFR(self,
+                     mode: str = 'empirical',
+                     *args,
+                     **kwargs
+                     ) -> float:
+        if mode == 'empirical':
+            self.rsSFR = self.compute_rsSFR_empirical(*args, **kwargs)
+        elif mode == 'from sSFR':
+            self.rsSFR = self.compute_rsSFR_from_sSFR(*args, **kwargs)
+        else:
+            print("Unsupported keyword for 'mode' in Galaxy.update_rsSFR()")
         return self.rsSFR
 
-    def compute_rsSFR(self,
-                      mstar: float = None,
-                      z: float = None
-                      ) -> float:
+    def compute_rsSFR_empirical(self,
+                                mstar: float = None,
+                                z: float = None
+                                ) -> float:
         """Computes the reduced specific star formation rate according to
         Lilly et al. 2013, Eq. (2), for z < 2. and z > 2., respectively"""
         mstar = self.mstar if mstar is None else mstar
@@ -576,6 +631,16 @@ class Galaxy:
             return 0.07 * (10**10.5 / mstar)**(0.1) * (1 + z)**3 #* 10**(-9)
         else:
             return 0.3 * (10**10.5 / mstar)**(0.1) * (1 + z)**(5/3) #* 10**(-9)
+
+    def compute_rsSFR_from_sSFR(self,
+                                IRF: float = None,
+                                sSFR:float = None) -> float:
+        """Computes the reduced specific star formation rate from
+        the non-reduced, regular specific star formation rate"""
+        IRF = self.IRF if IRF is None else IRF
+        sSFR = self.sSFR if sSFR is None else sSFR
+
+        return (1. - IRF) * sSFR
 
 
     # SFR
@@ -612,23 +677,48 @@ class Galaxy:
 
 
     # sSFR
-    def update_sSFR(self, rsSFR: float = None, *args, **kwargs) -> float:
-        """Updates the actual, unreduced SFR and, if not supplied, the (reduced) rsSFR too"""
-        # update rsSFR first if not supplied, since it's based off it
-        if rsSFR is None:
-            self.update_rsSFR()
+    def update_sSFR(self,
+                    mode: str = 'from rsSFR',
+                    rsSFR: float = None,
+                    *args,
+                    **kwargs
+                    ) -> float:
+        """Updates the actual, unreduced sSFR and, if not supplied, the (reduced) rsSFR too"""
 
-        # now compute and update sSFR
-        self.sSFR = self.compute_sSFR(*args, **kwargs)
+        if mode == 'from rsSFR':
+            # following Lilly+13 ideal regulator
+            # update rsSFR first if not supplied, since it's based off it
+            if rsSFR is None:
+                self.update_rsSFR(mode='empirical')
+            # now compute and update sSFR
+            self.sSFR = self.compute_sSFR_from_rsSFR(*args, **kwargs)
+        elif mode == 'from SFR':
+            # following the 'intuitive' approach and derive it from SFR and mstar
+            self.sSFR = self.compute_sSFR_from_SFR(*args, **kwargs)
+            # also update dependent quantity, rsSFR, after the fact
+            if rsSFR is None:
+                self.update_rsSFR(mode='from sSFR')
+            else:
+                print("Unsupported keyword for 'mode' in Galaxy.update_sSFR()")
+
         return self.sSFR
 
-    def compute_sSFR(self,
-                     rsSFR: float = None,
-                     IRF: float = None
-                     ) -> float:
-        """Computes the actual, unreduced SFR from the rsSFR"""
+    def compute_sSFR_from_rsSFR(self,
+                                rsSFR: float = None,
+                                IRF: float = None
+                                ) -> float:
+        """Computes the actual, unreduced sSFR from the rsSFR"""
         rsSFR = self.rsSFR if rsSFR is None else rsSFR
         IRF = self.IRF if IRF is None else IRF
 
         return rsSFR / (1. - IRF)
 
+    def compute_sSFR_from_SFR(self,
+                              mstar: float = None,
+                              SFR: float = None
+                              ) -> float:
+        """Computes the intuitive sSFR from SFR and mstar"""
+        mstar = self.mstar if mstar is None else mstar
+        SFR = self.SFR if SFR is None else SFR
+
+        return SFR / mstar
