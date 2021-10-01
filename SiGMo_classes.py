@@ -342,9 +342,9 @@ class Galaxy:
         self.update_fgas()
 
         # updating the change rates for stars, outflows and gas reservoir
-        self.update_SFR()
-        self.update_MLR()
-        self.update_GCR()
+        self.update_SFR(mode='from fstar')
+        self.update_MLR(mode='from fout')
+        self.update_GCR(mode='from fgas')
 
         # update stellar mass, gas mass and ejected mass
         self.update_mstar(timestep=timestep)
@@ -380,9 +380,9 @@ class Galaxy:
         # self.update_fgas()
 
         # updating the change rates for stars, outflows and gas reservoir
-        self.update_SFR()
-        self.update_MLR()
-        self.update_GCR()
+        self.update_SFR(mode='from SFE')
+        self.update_MLR(mode='from MLF')
+        self.update_GCR(mode='from GAR')
 
         # update stellar mass, gas mass and ejected mass
         self.update_mstar(timestep=timestep)
@@ -492,19 +492,45 @@ class Galaxy:
 
 
     # GCR
-    def update_GCR(self, *args, **kwargs) -> float:
-        self.GCR = self.compute_GCR(*args, **kwargs)
+    def update_GCR(self,
+                   mode:str = "from fgas",
+                   *args,
+                   **kwargs
+                   ) -> float:
+        if mode == "from fgas":
+            self.GCR = self.compute_GCR_from_fgas(*args, **kwargs)
+        elif mode == "from GAR":
+            self.GCR = self.compute_GCR_from_GAR(*args, **kwargs)
+        else:
+            print(f"Unsupported keyword for 'mode' in Galaxy.update_GCR()."
+                  f"GCR not updated")
         return self.GCR
 
-    def compute_GCR(self,
-                    GAR: float = None,
-                    fgas: float = None
-                    ) -> float:
+    def compute_GCR_from_fgas(self,
+                              GAR: float = None,
+                              fgas: float = None
+                              ) -> float:
         """Compute (reservoir) gas change rate from fractions in Lilly+13 ideal regulator"""
         GAR = self.GAR if GAR is None else GAR
         fgas = self.fgas if fgas is None else fgas
 
         return fgas * GAR
+
+    def compute_GCR_from_GAR(self,
+                             GAR: float = None,
+                             MLR: float = None,
+                             SFR: float = None
+                             ) -> float:
+        """Compute (reservoir) gas change rate more 'intuitively' straight
+        from overall accretion of gas into the galaxy, minus the gas that is
+        expelled or turned into (long or short lived aka any kind of) stars.
+        The instant return of gas from short lived stars is handled at the
+        level of the integration of mstar, mgas"""
+        GAR = self.GAR if GAR is None else GAR
+        MLR = self.MLR if MLR is None else MLR
+        SFR = self.SFR if SFR is None else SFR
+
+        return GAR - (MLR + SFR)
 
 
     # mgas
@@ -564,19 +590,40 @@ class Galaxy:
 
 
     # MLR
-    def update_MLR(self, *args, **kwargs) -> float:
-        self.MLR = self.compute_MLR(*args, **kwargs)
+    def update_MLR(self,
+                   mode:str = "from fout",
+                   *args,
+                   **kwargs
+                   ) -> float:
+        if mode == "from fout":
+            self.MLR = self.compute_MLR_from_fout(*args, **kwargs)
+        elif mode == "from MLF":
+            self.MLR = self.compute_MLR_from_MLF(*args, **kwargs)
+        else:
+            print(f"Unsupported keyword for 'mode' in Galaxy.update_MLR()."
+                  f"MLR not updated")
         return self.MLR
 
-    def compute_MLR(self,
-                    GAR: float = None,
-                    fout: float = None
-                    ) -> float:
+    def compute_MLR_from_fout(self,
+                              GAR: float = None,
+                              fout: float = None
+                              ) -> float:
         """Compute mass loss rate from fractions in Lilly+13 ideal regulator"""
         GAR = self.GAR if GAR is None else GAR
         fout = self.fout if fout is None else fout
 
         return fout * GAR
+
+    def compute_MLR_from_MLF(self,
+                             MLF: float = None,
+                             SFR: float = None
+                             ) -> float:
+        """Compute mass loss rate 'intuitively' from mass-loading factor
+        and star formation rate"""
+        MLF = self.MLF if MLF is None else MLF
+        SFR = self.SFR if SFR is None else SFR
+
+        return MLF * SFR
 
 
     # mout
@@ -615,7 +662,8 @@ class Galaxy:
         elif mode == 'from sSFR':
             self.rsSFR = self.compute_rsSFR_from_sSFR(*args, **kwargs)
         else:
-            print("Unsupported keyword for 'mode' in Galaxy.update_rsSFR()")
+            print("Unsupported keyword for 'mode' in Galaxy.update_rsSFR()."
+                  "rsSFR not updated")
         return self.rsSFR
 
     def compute_rsSFR_empirical(self,
@@ -644,19 +692,41 @@ class Galaxy:
 
 
     # SFR
-    def update_SFR(self, *args, **kwargs) -> float:
-        self.SFR = self.compute_SFR(*args, **kwargs)
-        return self.GAR
+    def update_SFR(self,
+                   mode: str = 'from fstar',
+                   *args,
+                   **kwargs
+                   ) -> float:
+        """Compute and update SFR according to 'mode' keyword"""
+        if mode == 'from fstar':
+            self.SFR = self.compute_SFR_from_fstar(*args, **kwargs)
+        elif mode == 'from SFE':
+            self.SFR = self.compute_SFR_from_SFE(*args, **kwargs)
+        else:
+            print("Unsupported keyword for 'mode' in Galaxy.update_SFR()."
+                  "SFR not updated")
+        return self.SFR
 
-    def compute_SFR(self,
-                    GAR: float = None,
-                    fstar: float = None
-                    ) -> float:
+    def compute_SFR_from_fstar(self,
+                               GAR: float = None,
+                               fstar: float = None
+                               ) -> float:
         """Compute star formation rate from fractions in Lilly+13 ideal regulator"""
         GAR = self.GAR if GAR is None else GAR
         fstar = self.fstar if fstar is None else fstar
 
         return fstar * GAR
+
+    def compute_SFR_from_SFE(self,
+                             mgas: float = None,
+                             SFE: float = None
+                             ) -> float:
+        """Compute star formation rate intuitively from star formation efficiency
+        and available gas"""
+        mgas = self.mgas if mgas is None else mgas
+        SFE = self.SFE if SFE is None else SFE
+
+        return SFE * mgas
 
 
     # sMIR
@@ -699,7 +769,8 @@ class Galaxy:
             if rsSFR is None:
                 self.update_rsSFR(mode='from sSFR')
             else:
-                print("Unsupported keyword for 'mode' in Galaxy.update_sSFR()")
+                print("Unsupported keyword for 'mode' in Galaxy.update_sSFR()."
+                      "sSFR not updated")
 
         return self.sSFR
 
