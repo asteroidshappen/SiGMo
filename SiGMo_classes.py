@@ -347,9 +347,9 @@ class Galaxy:
         self.update_GCR(mode='from fgas')
 
         # update stellar mass, gas mass and ejected mass
-        self.update_mstar(timestep=timestep)
+        self.update_mstar(timestep=timestep, mode="from reduced SFR")
         self.update_mout(timestep=timestep)
-        self.update_mgas(timestep=timestep)
+        self.update_mgas(timestep=timestep, mode="from reduced SFR")
         # also update total halo mass
         self.update_mhalo(timestep=timestep)
 
@@ -385,9 +385,9 @@ class Galaxy:
         self.update_GCR(mode='from GAR')
 
         # update stellar mass, gas mass and ejected mass
-        self.update_mstar(timestep=timestep)
+        self.update_mstar(timestep=timestep, mode="from unreduced SFR")
         self.update_mout(timestep=timestep)
-        self.update_mgas(timestep=timestep)
+        self.update_mgas(timestep=timestep, mode="from unreduced SFR")
         # also update total halo mass
         self.update_mhalo(timestep=timestep)
 
@@ -534,16 +534,43 @@ class Galaxy:
 
 
     # mgas
-    def update_mgas(self, timestep: float, *args, **kwargs) -> float:
-        self.mgas = self.compute_mgas(timestep=timestep, *args, **kwargs)
+    def update_mgas(self,
+                    timestep: float,
+                    mode:str = "from reduced SFR",
+                    *args,
+                    **kwargs
+                    ) -> float:
+        """Update the gas mass (in reservoir) according to 'mode' keyword"""
+        if mode == "from reduced SFR":
+            self.mgas = self.compute_mgas_from_reduced_SFR(timestep=timestep, *args, **kwargs)
+        elif mode == "from unreduced SFR":
+            self.mgas = self.compute_mgas_from_unreduced_SFR(timestep=timestep, *args, **kwargs)
+        else:
+            print("Unsupported keyword for 'mode' in Galaxy.update_mgas()."
+                  "mgas not updated")
         return self.mgas
 
-    def compute_mgas(self,
-                      timestep: float,
-                      GCR: float = None,) -> float:
+    def compute_mgas_from_reduced_SFR(self,
+                                      timestep: float,
+                                      GCR: float = None,
+                                      mgas: float = None
+                                      ) -> float:
+        """Compute the new gas mass (in reservoir) from SFR that already is reduced by (1 - IRF)"""
         GCR = self.GCR if GCR is None else GCR
+        mgas = self.mgas if mgas is None else mgas
 
-        return GCR * timestep
+        return mgas + (GCR * timestep)
+
+    def compute_mgas_from_unreduced_SFR(self,
+                                        timestep: float,
+                                        GCR: float = None,
+                                        mgas: float = None
+                                        ) -> float:
+        """Compute the new gas mass (in reservoir) from SFR that already is not yet reduced by (1 - IRF)"""
+        GCR = self.GCR if GCR is None else GCR
+        mgas = self.mgas if mgas is None else mgas
+
+        return mgas + (GCR * timestep)
 
 
     # mhalo
@@ -628,28 +655,62 @@ class Galaxy:
 
     # mout
     def update_mout(self, timestep: float, *args, **kwargs) -> float:
+        """Update the mass gas lost from the system up to this point"""
         self.mout = self.compute_mout(timestep=timestep, *args, **kwargs)
         return self.mout
 
     def compute_mout(self,
-                      timestep: float,
-                      MLR: float = None,) -> float:
+                     timestep: float,
+                     MLR: float = None,
+                     mout: float = None
+                     ) -> float:
+        """Compute the total gas mass lost from the system until now"""
         MLR = self.MLR if MLR is None else MLR
+        mout = self.mout if mout is None else mout
 
-        return MLR * timestep
+        return mout + (MLR * timestep)
 
 
     # mstar
-    def update_mstar(self, timestep: float, *args, **kwargs) -> float:
-        self.mstar = self.compute_mstar(timestep=timestep, *args, **kwargs)
+    def update_mstar(self,
+                     timestep: float,
+                     mode: str = "from reduced SFR",
+                     *args,
+                     **kwargs
+                     ) -> float:
+        """Update current stellar mass according to the 'mode' keyword provided"""
+        if mode == "from reduced SFR":
+            self.mstar = self.compute_mstar_from_reduced_SFR(timestep=timestep, *args, **kwargs)
+        elif mode == "from unreduced SFR":
+            self.mstar = self.compute_mstar_from_unreduced_SFR(timestep=timestep, *args, **kwarg)
+        else:
+            print("Unsupported keyword for 'mode' in Galaxy.update_mstar()."
+                  "mstar not updated")
         return self.mstar
 
-    def compute_mstar(self,
-                      timestep: float,
-                      SFR: float = None,) -> float:
+    def compute_mstar_from_reduced_SFR(self,
+                                       timestep: float,
+                                       mstar: float = None,
+                                       SFR: float = None
+                                       ) -> float:
+        """Compute current stellar mass from SFR already reduced by (1 - IRF)"""
+        mstar = self.mstar if mstar is None else mstar
         SFR = self.SFR if SFR is None else SFR
 
-        return SFR * timestep
+        return mstar + (SFR * timestep)
+
+    def compute_mstar_from_unreduced_SFR(self,
+                                         timestep: float,
+                                         IRF: float = None,
+                                         mstar: float = None,
+                                         SFR: float = None
+                                         ) -> float:
+        """Compute current stellar mass from SFR unreduced by (1 - IRF)"""
+        IRF = self.IRF if IRF is None else IRF
+        mstar = self.mstar if mstar is None else mstar
+        SFR = self.SFR if SFR is None else SFR
+
+        return mstar + ((1 - IRF) * SFR * timestep)
 
     # rsSFR
     def update_rsSFR(self,
