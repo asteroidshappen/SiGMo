@@ -37,6 +37,8 @@ class Environment:
         Creates Galaxy object and adds it to galaxies list
     reference_evolve(timestep: float = 1.e-3)
         Evolves the environment and all galaxies acc. to Lilly+13, Eq.12a,13a,14a
+    intuitive_evolve(timestep: float = 1.e-3)
+        Evolves the Environment and all galaxies in it in an 'intuitive' fashion
     """
 
     def __init__(self,
@@ -91,6 +93,7 @@ class Environment:
     def create_Galaxy(self,
                       **galaxy_kwargs: dict
                       ):
+        """Creates Galaxy object and adds it to galaxies list"""
         gal = Galaxy(env=self, **galaxy_kwargs)
         self.galaxies.append(gal)
         return gal
@@ -99,6 +102,7 @@ class Environment:
     def reference_evolve(self,
                          timestep: float = 1.e-3
                          ):
+        """Evolves the Environment and all galaxies acc. to Lilly+13, Eq.12a,13a,14a"""
         # make the time step in lookbacktime, then convert to z as well
         self.lookbacktime -= timestep
         self.z = z_at_value(cosmo.age, cosmo.age(0) - self.lookbacktime * u.Gyr) #, zmin=self.z-.5, zmax=self.z+.5)  # Gyr HARDCODED AGAIN!
@@ -106,6 +110,20 @@ class Environment:
         # go through all the galaxies and evolve/update them based on new time
         for gal in self.galaxies:
             gal.reference_evolve(timestep=timestep)
+        return
+
+
+    def intuitive_evolve(self,
+                         timestep: float = 1.e-3
+                         ):
+        """Evolves the Environment and all galaxies in it in an 'intuitive' fashion"""
+        # make the time step in lookbacktime, then convert to z as well
+        self.lookbacktime -= timestep
+        self.z = z_at_value(cosmo.age, cosmo.age(0) - self.lookbacktime * u.Gyr) #, zmin=self.z-.5, zmax=self.z+.5)  # Gyr HARDCODED AGAIN!
+
+        # go through all the galaxies and evolve/update them based on new time
+        for gal in self.galaxies:
+            gal.intuitive_evolve(timestep=timestep)
         return
 
 
@@ -144,6 +162,8 @@ class Galaxy:
         The mass-loading factor coupling SFR and mass loss (default 0.1)
     MLR : float, optional
         The mass loss rate from the galaxy (default 0.)
+    macc : float, optional
+        The total mass accreted onto the galaxy (default 0.)
     mgas : float, optional
         The gas mass content of the galaxy (default 1.e10)
     mhalo : float, optional
@@ -154,10 +174,14 @@ class Galaxy:
         The mass lost from the system due to massloss (default 0.)
     name : str, optional
         The name of the galaxy (default 'Test_Gal')
+    previous : dict, optional
+        Stores the previous state of all galaxy properties to allow easy
+        computation of delta_YYY change properties. Gets overwritten at
+        the beginning of any XXX_evolve() method (default None)
     rsSFR : float, optional
         The reduced specific SFR; excludes instant.returned gas (default 0.)
     SFE : float, optional
-        The star formation efficiency (default 0.3)
+        The star formation efficiency (default 0.01)
     SFR : float, optional
         The star formation rate in the galaxy (default 0.)
     sMIR : float, optional
@@ -170,13 +194,13 @@ class Galaxy:
 
     Methods
     -------
-    compute_fstar(self) -> float:
+    compute_fstar_beforehand(self) -> float:
         Fraction of incoming gas converted to stars,
         based on Eq. 12a from Lilly+13, for ideal regulator
-    compute_fout(self) -> float:
+    compute_fout_beforehand(self) -> float:
         Fraction of incoming gas expelled again from the galaxy,
         based on Eq. 13a from Lilly+13, for ideal regulator
-    compute_fgas(self) -> float:
+    compute_fgas_beforehand(self) -> float:
         Fraction of incoming gas added to the galaxy gas reservoir,
         based on Eq. 14a from Lilly+13, for ideal regulator
     reference_evolve(timestep: float = 1.e-3)
@@ -199,13 +223,14 @@ class Galaxy:
                  MIR: float = 0.,
                  MLF: float = 0.1,
                  MLR: float = 0.,
+                 macc: float = 0.,
                  mgas: float = 1.e10,
                  mhalo: float = 1.e12,
                  mstar: float = 1.e9,
                  mout: float = 0.,
                  name: str = 'Test_Gal',
                  rsSFR: float = 0.,
-                 SFE: float = 0.3,
+                 SFE: float = 0.01,
                  SFR: float = 0.,
                  sMIR: float = 0.,
                  sSFR: float = 0.,
@@ -224,11 +249,13 @@ class Galaxy:
         self.MIR = MIR
         self.MLF = MLF
         self.MLR = MLR
+        self.macc = macc
         self.mgas = mgas
         self.mhalo = mhalo
         self.mstar = mstar
         self.mout = mout
         self.name = name
+        self.previous = None
         self.rsSFR = rsSFR
         self.SFE = SFE
         self.SFR = SFR
@@ -253,16 +280,27 @@ class Galaxy:
     # fractional splitting of incoming baryons, cf.Lilly+13,Eqns. 12-14a
 
     # fstar
-    def update_fstar(self, *args, **kwargs) -> float:
-        self.fstar = self.compute_fstar(*args, **kwargs)
+    def update_fstar(self,
+                     mode: str = "beforehand",
+                     *args,
+                     **kwargs
+                     ) -> float:
+        """Update the fraction of gas accreted onto the galaxy turned into long-lived stars"""
+        if mode == "beforehand":
+            self.fstar = self.compute_fstar_beforehand(*args, **kwargs)
+        elif mode == "afterwards":
+            self.fstar = self.compute_fstar_afterwards(*args, **kwargs)
+        else:
+            print("Unsupported keyword for 'mode' in Galaxy.update_fstar()."
+                  "fstar not updated")
         return self.fstar
 
-    def compute_fstar(self,
-                      IRF: float = None,
-                      MLF: float = None,
-                      SFE: float = None,
-                      sSFR: float = None
-                      ) -> float:
+    def compute_fstar_beforehand(self,
+                                 IRF: float = None,
+                                 MLF: float = None,
+                                 SFE: float = None,
+                                 sSFR: float = None
+                                 ) -> float:
         """Fraction of incoming gas converted to stars,
         based on Eq. 12a from Lilly+13, for ideal regulator"""
         IRF = self.IRF if IRF is None else IRF
@@ -275,17 +313,39 @@ class Galaxy:
                 + sSFR / SFE)
         return 1./_tmp
 
+    def compute_fstar_afterwards(self,
+                                 delta_macc: float = None,
+                                 delta_mstar: float = None
+                                 ) -> float:
+        """Fraction of incoming gas converted to (long lived) stars,
+        based on the mstar and macc increase"""
+        delta_macc = (self.macc - self.previous["macc"]) if delta_macc is None else delta_macc
+        delta_mstar = (self.mstar - self.previous["mstar"]) if delta_mstar is None else delta_mstar
+
+        return delta_mstar / delta_macc
+
     # fout
-    def update_fout(self, *args, **kwargs) -> float:
-        self.fout = self.compute_fout(*args, **kwargs)
+    def update_fout(self,
+                    mode: str = "beforehand",
+                    *args,
+                    **kwargs
+                    ) -> float:
+        """Update the fraction of gas accreted onto the galaxy expelled out of the galaxy again"""
+        if mode == "beforehand":
+            self.fout = self.compute_fout_beforehand(*args, **kwargs)
+        elif mode == "afterwards":
+            self.fout = self.compute_fout_afterwards(*args, **kwargs)
+        else:
+            print("Unsupported keyword for 'mode' in Galaxy.update_fout()."
+                  "fout not updated")
         return self.fout
 
-    def compute_fout(self,
-                     IRF: float = None,
-                     MLF: float = None,
-                     SFE: float = None,
-                     sSFR: float = None
-                     ) -> float:
+    def compute_fout_beforehand(self,
+                                IRF: float = None,
+                                MLF: float = None,
+                                SFE: float = None,
+                                sSFR: float = None
+                                ) -> float:
         """Fraction of incoming gas expelled again from the galaxy,
         based on Eq. 13a from Lilly+13, for ideal regulator"""
         IRF = self.IRF if IRF is None else IRF
@@ -298,17 +358,39 @@ class Galaxy:
                 + sSFR / SFE)
         return (MLF / (1. - IRF)) / _tmp
 
+    def compute_fout_afterwards(self,
+                                delta_macc: float = None,
+                                delta_mout: float = None
+                                ) -> float:
+        """Fraction of incoming gas expelled again from the galaxy,
+        based on the mout and macc increase"""
+        delta_macc = (self.macc - self.previous["macc"]) if delta_macc is None else delta_macc
+        delta_mout = (self.mout - self.previous["mout"]) if delta_mout is None else delta_mout
+
+        return delta_mout / delta_macc
+
     # fgas
-    def update_fgas(self, *args, **kwargs) -> float:
-        self.fgas = self.compute_fgas(*args, **kwargs)
+    def update_fgas(self,
+                    mode: str = "beforehand",
+                    *args,
+                    **kwargs
+                    ) -> float:
+        """Update the fraction of gas accreted onto the galaxy that goes into the reservoir"""
+        if mode == "beforehand":
+            self.fgas = self.compute_fgas_beforehand(*args, **kwargs)
+        elif mode == "afterwards":
+            self.fgas = self.compute_fgas_afterwards(*args, **kwargs)
+        else:
+            print("Unsupported keyword for 'mode' in Galaxy.update_fgas()."
+                  "fgas not updated")
         return self.fgas
 
-    def compute_fgas(self,
-                     IRF: float = None,
-                     MLF: float = None,
-                     SFE: float = None,
-                     sSFR: float = None
-                     ) -> float:
+    def compute_fgas_beforehand(self,
+                                IRF: float = None,
+                                MLF: float = None,
+                                SFE: float = None,
+                                sSFR: float = None
+                                ) -> float:
         """Fraction of incoming gas added to the galaxy gas reservoir,
         based on Eq. 14a from Lilly+13, for ideal regulator (fres)"""
         IRF = self.IRF if IRF is None else IRF
@@ -321,12 +403,27 @@ class Galaxy:
                 + sSFR / SFE)
         return (sSFR / SFE) / _tmp
 
+    def compute_fgas_afterwards(self,
+                                delta_macc: float = None,
+                                delta_mgas: float = None
+                                ) -> float:
+        """Fraction of incoming gas added to the galaxy gas reservoir,
+        based on the mgas and macc increase"""
+        delta_macc = (self.macc - self.previous["macc"]) if delta_macc is None else delta_macc
+        delta_mgas = (self.mgas - self.previous["mgas"]) if delta_mgas is None else delta_mgas
+
+        return delta_mgas / delta_macc
+
 
     def reference_evolve(self,
                          timestep: float = 1.e-3
-                         ):
+                         ) -> dict:
         """Evolves the galaxy by one timestep according to Lilly+13 Eq.12a,13a,14a,
         ideal regulator"""
+        # store snapshot of previous state before anything gets changed
+        self.previous = None
+        self.previous = self.make_snapshot()
+
         # update the redshift of the galaxy to the environment's z
         self.z = self.env.z
 
@@ -337,23 +434,25 @@ class Galaxy:
         self.update_sSFR(mode='from rsSFR')
 
         # (compute and) update current fractions of how inflows are distributed
-        self.update_fstar()
-        self.update_fout()
-        self.update_fgas()
+        self.update_fstar(mode="beforehand")
+        self.update_fout(mode="beforehand")
+        self.update_fgas(mode="beforehand")
 
         # updating the change rates for stars, outflows and gas reservoir
         self.update_SFR(mode='from fstar')
         self.update_MLR(mode='from fout')
         self.update_GCR(mode='from fgas')
 
+        # update the total gross mass accreted onto the galaxy
+        self.update_macc(timestep=timestep)
         # update stellar mass, gas mass and ejected mass
         self.update_mstar(timestep=timestep, mode="from reduced SFR")
         self.update_mout(timestep=timestep)
-        self.update_mgas(timestep=timestep, mode="from reduced SFR")
+        self.update_mgas(timestep=timestep)
         # also update total halo mass
         self.update_mhalo(timestep=timestep)
 
-        return
+        return self.make_snapshot()
 
 
     # ------------------------------
@@ -361,9 +460,13 @@ class Galaxy:
 
     def intuitive_evolve(self,
                          timestep: float = 1.e-3
-                         ):
+                         ) -> dict:
         """Evolves the galaxy by one timestep intuitively, *without* using
         sSFR(mstar, z) as time-dependent input (like Lilly+13 do)"""
+        # store snapshot of previous state before anything gets changed
+        self.previous = None
+        self.previous = self.make_snapshot()
+
         # update the redshift of the galaxy to the environment's z
         self.z = self.env.z
 
@@ -371,38 +474,35 @@ class Galaxy:
         # GAR (and through it MIR and through the latter sMIR)
         self.update_GAR()
 
-
-        # FRACTIONS fstar, fout, fgas NOT NEEDED IN INTUITIVE MODEL ANYMORE -
-        # maybe compute afterwards for comparison with 'reference_evolve()'?
-        # # (compute and) update current fractions of how inflows are distributed
-        # self.update_fstar()
-        # self.update_fout()
-        # self.update_fgas()
-
         # updating the change rates for stars, outflows and gas reservoir
         self.update_SFR(mode='from SFE')
         self.update_MLR(mode='from MLF')
         self.update_GCR(mode='from GAR')
 
+        # update the total gross mass accreted onto the galaxy
+        self.update_macc(timestep=timestep)
         # update stellar mass, gas mass and ejected mass
         self.update_mstar(timestep=timestep, mode="from unreduced SFR")
         self.update_mout(timestep=timestep)
-        self.update_mgas(timestep=timestep, mode="from unreduced SFR")
+        self.update_mgas(timestep=timestep)
         # also update total halo mass
         self.update_mhalo(timestep=timestep)
 
         # update some derived quantities, here sSFR (and through it rsSFR)
         self.update_sSFR(mode='from SFR')
 
-        return
+        # (compute and) update increases/decreases as fractions of gross accreted mass onto galaxy
+        self.update_fstar(mode="afterwards")
+        self.update_fout(mode="afterwards")
+        self.update_fgas(mode="afterwards")
+
+        return self.make_snapshot()
 
 
-
-
-
+    # ---------------------------
     # make snapshot of the system
 
-    def make_snapshot(self):
+    def make_snapshot(self) -> dict:
         """Returns the current values of all major attributes as dict"""
         _tmp_out = dict(vars(self))
         _tmp_out['env'] = _tmp_out['env'].name if _tmp_out['env'] is not None else None
@@ -518,6 +618,7 @@ class Galaxy:
 
     def compute_GCR_from_GAR(self,
                              GAR: float = None,
+                             IFR: float = None,
                              MLR: float = None,
                              SFR: float = None
                              ) -> float:
@@ -527,46 +628,53 @@ class Galaxy:
         The instant return of gas from short lived stars is handled at the
         level of the integration of mstar, mgas"""
         GAR = self.GAR if GAR is None else GAR
+        IRF = self.IRF if IFR is None else IFR
         MLR = self.MLR if MLR is None else MLR
         SFR = self.SFR if SFR is None else SFR
 
-        return GAR - (MLR + SFR)
+        return GAR - (MLR + (1 - IRF) * SFR)
+
+
+    # macc
+    def update_macc(self,
+                    timestep: float,
+                    *args,
+                    **kwargs
+                    ) -> float:
+        """Update the total mass accreted onto the galaxy"""
+        self.macc = self.compute_macc(timestep=timestep, *args, **kwargs)
+
+        return self.macc
+
+    def compute_macc(self,
+                     timestep: float,
+                     GAR: float = None,
+                     macc: float = None
+                     ) -> float:
+        """Compute the new total mass accreted by the galaxy"""
+        GAR = self.GAR if GAR is None else GAR
+        macc = self.macc if macc is None else macc
+
+        return macc + (GAR * timestep)
 
 
     # mgas
     def update_mgas(self,
                     timestep: float,
-                    mode:str = "from reduced SFR",
                     *args,
                     **kwargs
                     ) -> float:
-        """Update the gas mass (in reservoir) according to 'mode' keyword"""
-        if mode == "from reduced SFR":
-            self.mgas = self.compute_mgas_from_reduced_SFR(timestep=timestep, *args, **kwargs)
-        elif mode == "from unreduced SFR":
-            self.mgas = self.compute_mgas_from_unreduced_SFR(timestep=timestep, *args, **kwargs)
-        else:
-            print("Unsupported keyword for 'mode' in Galaxy.update_mgas()."
-                  "mgas not updated")
+        """Update the gas mass (in reservoir)"""
+        self.mgas = self.compute_mgas(timestep=timestep, *args, **kwargs)
+
         return self.mgas
 
-    def compute_mgas_from_reduced_SFR(self,
-                                      timestep: float,
-                                      GCR: float = None,
-                                      mgas: float = None
-                                      ) -> float:
-        """Compute the new gas mass (in reservoir) from SFR that already is reduced by (1 - IRF)"""
-        GCR = self.GCR if GCR is None else GCR
-        mgas = self.mgas if mgas is None else mgas
-
-        return mgas + (GCR * timestep)
-
-    def compute_mgas_from_unreduced_SFR(self,
-                                        timestep: float,
-                                        GCR: float = None,
-                                        mgas: float = None
-                                        ) -> float:
-        """Compute the new gas mass (in reservoir) from SFR that already is not yet reduced by (1 - IRF)"""
+    def compute_mgas(self,
+                     timestep: float,
+                     GCR: float = None,
+                     mgas: float = None
+                     ) -> float:
+        """Compute the new gas mass (in reservoir) from GCR that already factors in a SFR reduced by (1 - IRF)"""
         GCR = self.GCR if GCR is None else GCR
         mgas = self.mgas if mgas is None else mgas
 
@@ -682,7 +790,7 @@ class Galaxy:
         if mode == "from reduced SFR":
             self.mstar = self.compute_mstar_from_reduced_SFR(timestep=timestep, *args, **kwargs)
         elif mode == "from unreduced SFR":
-            self.mstar = self.compute_mstar_from_unreduced_SFR(timestep=timestep, *args, **kwarg)
+            self.mstar = self.compute_mstar_from_unreduced_SFR(timestep=timestep, *args, **kwargs)
         else:
             print("Unsupported keyword for 'mode' in Galaxy.update_mstar()."
                   "mstar not updated")
