@@ -273,146 +273,12 @@ class Galaxy:
 
 
     # ------------------------------
-    # time integration of the system (reference method by Lilly+13, "ideal regulator")
+    # time integration of the system - reference method by Lilly+13, "ideal regulator"
 
     # This is the reference model from Lilly et al. 2013, ideal case
     # based on Eqns. (12a), (13a), (14a)
     # fractional splitting of incoming baryons, cf.Lilly+13,Eqns. 12-14a
 
-    # fstar
-    def update_fstar(self,
-                     mode: str = "beforehand",
-                     *args,
-                     **kwargs
-                     ) -> float:
-        """Update the fraction of gas accreted onto the galaxy turned into long-lived stars"""
-        if mode == "beforehand":
-            self.fstar = self.compute_fstar_beforehand(*args, **kwargs)
-        elif mode == "afterwards":
-            self.fstar = self.compute_fstar_afterwards(*args, **kwargs)
-        else:
-            print("Unsupported keyword for 'mode' in Galaxy.update_fstar()."
-                  "fstar not updated")
-        return self.fstar
-
-    def compute_fstar_beforehand(self,
-                                 IRF: float = None,
-                                 MLF: float = None,
-                                 SFE: float = None,
-                                 sSFR: float = None
-                                 ) -> float:
-        """Fraction of incoming gas converted to stars,
-        based on Eq. 12a from Lilly+13, for ideal regulator"""
-        IRF = self.IRF if IRF is None else IRF
-        MLF = self.MLF if MLF is None else MLF
-        SFE = self.SFE if SFE is None else SFE
-        sSFR = self.sSFR if sSFR is None else sSFR
-
-        _tmp = (1.
-                + MLF / (1. - IRF)
-                + sSFR / SFE)
-        return 1./_tmp
-
-    def compute_fstar_afterwards(self,
-                                 delta_macc: float = None,
-                                 delta_mstar: float = None
-                                 ) -> float:
-        """Fraction of incoming gas converted to (long lived) stars,
-        based on the mstar and macc increase"""
-        delta_macc = (self.macc - self.previous["macc"]) if delta_macc is None else delta_macc
-        delta_mstar = (self.mstar - self.previous["mstar"]) if delta_mstar is None else delta_mstar
-
-        return delta_mstar / delta_macc
-
-    # fout
-    def update_fout(self,
-                    mode: str = "beforehand",
-                    *args,
-                    **kwargs
-                    ) -> float:
-        """Update the fraction of gas accreted onto the galaxy expelled out of the galaxy again"""
-        if mode == "beforehand":
-            self.fout = self.compute_fout_beforehand(*args, **kwargs)
-        elif mode == "afterwards":
-            self.fout = self.compute_fout_afterwards(*args, **kwargs)
-        else:
-            print("Unsupported keyword for 'mode' in Galaxy.update_fout()."
-                  "fout not updated")
-        return self.fout
-
-    def compute_fout_beforehand(self,
-                                IRF: float = None,
-                                MLF: float = None,
-                                SFE: float = None,
-                                sSFR: float = None
-                                ) -> float:
-        """Fraction of incoming gas expelled again from the galaxy,
-        based on Eq. 13a from Lilly+13, for ideal regulator"""
-        IRF = self.IRF if IRF is None else IRF
-        MLF = self.MLF if MLF is None else MLF
-        SFE = self.SFE if SFE is None else SFE
-        sSFR = self.sSFR if sSFR is None else sSFR
-
-        _tmp = (1.
-                + MLF / (1. - IRF)
-                + sSFR / SFE)
-        return (MLF / (1. - IRF)) / _tmp
-
-    def compute_fout_afterwards(self,
-                                delta_macc: float = None,
-                                delta_mout: float = None
-                                ) -> float:
-        """Fraction of incoming gas expelled again from the galaxy,
-        based on the mout and macc increase"""
-        delta_macc = (self.macc - self.previous["macc"]) if delta_macc is None else delta_macc
-        delta_mout = (self.mout - self.previous["mout"]) if delta_mout is None else delta_mout
-
-        return delta_mout / delta_macc
-
-    # fgas
-    def update_fgas(self,
-                    mode: str = "beforehand",
-                    *args,
-                    **kwargs
-                    ) -> float:
-        """Update the fraction of gas accreted onto the galaxy that goes into the reservoir"""
-        if mode == "beforehand":
-            self.fgas = self.compute_fgas_beforehand(*args, **kwargs)
-        elif mode == "afterwards":
-            self.fgas = self.compute_fgas_afterwards(*args, **kwargs)
-        else:
-            print("Unsupported keyword for 'mode' in Galaxy.update_fgas()."
-                  "fgas not updated")
-        return self.fgas
-
-    def compute_fgas_beforehand(self,
-                                IRF: float = None,
-                                MLF: float = None,
-                                SFE: float = None,
-                                sSFR: float = None
-                                ) -> float:
-        """Fraction of incoming gas added to the galaxy gas reservoir,
-        based on Eq. 14a from Lilly+13, for ideal regulator (fres)"""
-        IRF = self.IRF if IRF is None else IRF
-        MLF = self.MLF if MLF is None else MLF
-        SFE = self.SFE if SFE is None else SFE
-        sSFR = self.sSFR if sSFR is None else sSFR
-
-        _tmp = (1.
-                + MLF / (1. - IRF)
-                + sSFR / SFE)
-        return (sSFR / SFE) / _tmp
-
-    def compute_fgas_afterwards(self,
-                                delta_macc: float = None,
-                                delta_mgas: float = None
-                                ) -> float:
-        """Fraction of incoming gas added to the galaxy gas reservoir,
-        based on the mgas and macc increase"""
-        delta_macc = (self.macc - self.previous["macc"]) if delta_macc is None else delta_macc
-        delta_mgas = (self.mgas - self.previous["mgas"]) if delta_mgas is None else delta_mgas
-
-        return delta_mgas / delta_macc
 
 
     def reference_evolve(self,
@@ -509,8 +375,8 @@ class Galaxy:
         return _tmp_out
 
 
-    # -------------------------------------------------------------------
-    # Functions for physical parameters that might also not change at all
+    # ----------------------------------------------------------------------------------
+    # General functions usable for physical parameters that also might not change at all
 
     # Use with different values e.g. for SFE(mstar,t), mass loading fact(mgas,t)
     def Parameter_function(self, quant, t, quant0, t0, a1, a2, a3):
@@ -533,9 +399,146 @@ class Galaxy:
 
 
 
-
     # ------------------------------------------
     # computing and updating physical quantities
+
+
+    # fgas
+    def update_fgas(self,
+                    mode: str = "beforehand",
+                    *args,
+                    **kwargs
+                    ) -> float:
+        """Update the fraction of gas accreted onto the galaxy that goes into the reservoir"""
+        if mode == "beforehand":
+            self.fgas = self.compute_fgas_beforehand(*args, **kwargs)
+        elif mode == "afterwards":
+            self.fgas = self.compute_fgas_afterwards(*args, **kwargs)
+        else:
+            print("Unsupported keyword for 'mode' in Galaxy.update_fgas()."
+                  "fgas not updated")
+        return self.fgas
+
+    def compute_fgas_beforehand(self,
+                                IRF: float = None,
+                                MLF: float = None,
+                                SFE: float = None,
+                                sSFR: float = None
+                                ) -> float:
+        """Fraction of incoming gas added to the galaxy gas reservoir,
+        based on Eq. 14a from Lilly+13, for ideal regulator (fres)"""
+        IRF = self.IRF if IRF is None else IRF
+        MLF = self.MLF if MLF is None else MLF
+        SFE = self.SFE if SFE is None else SFE
+        sSFR = self.sSFR if sSFR is None else sSFR
+
+        _tmp = (1.
+                + MLF / (1. - IRF)
+                + sSFR / SFE)
+        return (sSFR / SFE) / _tmp
+
+    def compute_fgas_afterwards(self,
+                                delta_macc: float = None,
+                                delta_mgas: float = None
+                                ) -> float:
+        """Fraction of incoming gas added to the galaxy gas reservoir,
+        based on the mgas and macc increase"""
+        delta_macc = (self.macc - self.previous["macc"]) if delta_macc is None else delta_macc
+        delta_mgas = (self.mgas - self.previous["mgas"]) if delta_mgas is None else delta_mgas
+
+        return delta_mgas / delta_macc
+
+
+    # fstar
+    def update_fstar(self,
+                     mode: str = "beforehand",
+                     *args,
+                     **kwargs
+                     ) -> float:
+        """Update the fraction of gas accreted onto the galaxy turned into long-lived stars"""
+        if mode == "beforehand":
+            self.fstar = self.compute_fstar_beforehand(*args, **kwargs)
+        elif mode == "afterwards":
+            self.fstar = self.compute_fstar_afterwards(*args, **kwargs)
+        else:
+            print("Unsupported keyword for 'mode' in Galaxy.update_fstar()."
+                  "fstar not updated")
+        return self.fstar
+
+    def compute_fstar_beforehand(self,
+                                 IRF: float = None,
+                                 MLF: float = None,
+                                 SFE: float = None,
+                                 sSFR: float = None
+                                 ) -> float:
+        """Fraction of incoming gas converted to stars,
+        based on Eq. 12a from Lilly+13, for ideal regulator"""
+        IRF = self.IRF if IRF is None else IRF
+        MLF = self.MLF if MLF is None else MLF
+        SFE = self.SFE if SFE is None else SFE
+        sSFR = self.sSFR if sSFR is None else sSFR
+
+        _tmp = (1.
+                + MLF / (1. - IRF)
+                + sSFR / SFE)
+        return 1./_tmp
+
+    def compute_fstar_afterwards(self,
+                                 delta_macc: float = None,
+                                 delta_mstar: float = None
+                                 ) -> float:
+        """Fraction of incoming gas converted to (long lived) stars,
+        based on the mstar and macc increase"""
+        delta_macc = (self.macc - self.previous["macc"]) if delta_macc is None else delta_macc
+        delta_mstar = (self.mstar - self.previous["mstar"]) if delta_mstar is None else delta_mstar
+
+        return delta_mstar / delta_macc
+
+
+    # fout
+    def update_fout(self,
+                    mode: str = "beforehand",
+                    *args,
+                    **kwargs
+                    ) -> float:
+        """Update the fraction of gas accreted onto the galaxy expelled out of the galaxy again"""
+        if mode == "beforehand":
+            self.fout = self.compute_fout_beforehand(*args, **kwargs)
+        elif mode == "afterwards":
+            self.fout = self.compute_fout_afterwards(*args, **kwargs)
+        else:
+            print("Unsupported keyword for 'mode' in Galaxy.update_fout()."
+                  "fout not updated")
+        return self.fout
+
+    def compute_fout_beforehand(self,
+                                IRF: float = None,
+                                MLF: float = None,
+                                SFE: float = None,
+                                sSFR: float = None
+                                ) -> float:
+        """Fraction of incoming gas expelled again from the galaxy,
+        based on Eq. 13a from Lilly+13, for ideal regulator"""
+        IRF = self.IRF if IRF is None else IRF
+        MLF = self.MLF if MLF is None else MLF
+        SFE = self.SFE if SFE is None else SFE
+        sSFR = self.sSFR if sSFR is None else sSFR
+
+        _tmp = (1.
+                + MLF / (1. - IRF)
+                + sSFR / SFE)
+        return (MLF / (1. - IRF)) / _tmp
+
+    def compute_fout_afterwards(self,
+                                delta_macc: float = None,
+                                delta_mout: float = None
+                                ) -> float:
+        """Fraction of incoming gas expelled again from the galaxy,
+        based on the mout and macc increase"""
+        delta_macc = (self.macc - self.previous["macc"]) if delta_macc is None else delta_macc
+        delta_mout = (self.mout - self.previous["mout"]) if delta_mout is None else delta_mout
+
+        return delta_mout / delta_macc
 
 
     # # gasmassfraction
