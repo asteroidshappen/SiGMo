@@ -262,6 +262,8 @@ class Galaxy:
         self.sMIR = sMIR
         self.sSFR = sSFR
         self.z = env.z if z is None else z
+        return
+
 
     def __repr__(self):
         r_string = ", ".join("=".join((str(k),(f"Environment() object '{v.name}'" if k == 'env' else str(v)))) for k,v in vars(self).items())
@@ -270,6 +272,142 @@ class Galaxy:
     def __str__(self):
         s_string = "\n".join(" = ".join(("  " + str(k),(f"Environment() object '{v.name}'" if k == 'env' else str(v)))) for k,v in vars(self).items())
         return f'Instance of Galaxy() with the following attributes:\n' + s_string
+
+
+    # -------------------
+    # methods for burn-in
+
+    # classmethod to create a galaxy and 'burn it in' by trying to find a (quasi-)equilibrium state
+    @classmethod
+    def with_burnin(cls,
+                    cycles_max: int = 1e6,
+                    check_attr: dict = None,
+                    div_aim: float = 1.e-3,
+                    div_delta_aim: float = 1.e-4,
+                    div_max: float = 1.e3,
+                    fixed_attr: dict = None,
+                    vartime: float = 1.e-3,
+                    *args,
+                    **kwargs
+                    ) -> 'Galaxy':
+        """Allows for 'burn-in' of select galaxy properties and for others to be kept fixed. Aim: (quasi-)equilibrium"""
+        # create new galaxy with initial values
+        newgal = cls(*args, **kwargs)
+
+        # set dicts with fixed attributes and attributes to evaluate to default if necessary
+        if check_attr is None:
+            check_attr = {'mstar': newgal.mstar,
+                          'SFR': newgal.SFR,
+                          'GCR': newgal.GCR,
+                          'MLR': newgal.MLR}
+        if fixed_attr is None:
+            fixed_attr = {'mhalo': newgal.mhalo,
+                          'mgas': newgal.mgas,
+                          'mout': newgal.mout}
+
+        # set div to highest allowed value as initial value
+        div = div_max
+
+        # set initial values for some of the loop criteria
+        converged = False
+        cycle = 0
+
+        # loop to make max cycles_max steps of burn-in
+        while not converged:
+            # store the attributes to be checked before next timestep
+            for attr, value in check_attr.items():
+                check_attr[attr] = getattr(newgal, attr)
+
+            # evolve for one timestep
+            newgal.intuitive_evolve(timestep=vartime)
+
+            # check for convergence, stability and divergence
+            div, converged, stable, diverged = newgal.check_for_convstabdiv(attr_to_check=check_attr,
+                                                                            div_aim=div_aim,
+                                                                            div_delta_aim=div_delta_aim,
+                                                                            div_max=div_max)
+            if converged:
+                print(f"Burn-in converged after {cycle} cycles")
+                break
+            else:
+                if diverged:
+                    print(f"Warning: burn-in diverged after {cycle} cycles!")
+                    break
+                else:
+                    newgal.reset_attributes(fixed_attr)
+            cycle += 1
+            if cycle == cycles_max:
+                print(f"Warning: burn-in has not converged after maximum of {cycle} cycles,")
+                if stable:
+                    print(f"but the change in attributes checked is stable")
+                else:
+                    print(f"and the change in attributes checked is not stable")
+                break
+
+        return newgal
+
+
+    # check for convergence, stability and divergence in specified attributes
+    def check_for_convstabdiv(self,
+                              attr_to_check: dict,
+                              div_aim = 1.e-3,
+                              div_delta_aim = None,
+                              div_max = None,
+                              div_previous = None
+                              ) -> (float, bool, bool):
+        """Check for convergence, stability, divergence in attributes that are specified
+
+        In this context,
+          * converged: div of current iteration has fallen below a defined threshold (div_aim), so the change in
+                       attribute is sufficiently small;
+          * stable:    the change in div compared to the last iteration is sufficiently small (div_delta_aim). This
+                       does not mean that the attribute does not change anymore, but just that the change is constant
+                       albeit over one timestep only;
+          * diverged:  div of current iteration has surpassed a defined threshold value (div_max), so the change is
+                       deemed to be too extreme
+
+        Returns: div (a measure for the change in all checked parameters),
+                 converged (bool),
+                 stable (bool),
+                 diverged (bool)"""
+
+        div_delta_aim = (div_aim / 10.) if div_delta_aim is None else div_delta_aim
+        div_max = (div_aim * 1.e6) if div_max is None else div_max
+        div_previous = div_max if div_previous is None else div_previous
+
+        # get and compute individual attributes' divs
+        attr_div = {}
+        for attr, value_old in attr_to_check.items():
+            value_new = getattr(self, attr)
+            attr_div[attr] = (value_new - value_old) / (value_new + value_old + 1.e-7)  # avoid division by zero
+
+        # compute combined div
+        div = np.array(list(attr_div.items()))[..., 1]
+        div = div.astype(float)
+        div = np.sqrt(np.sum(div**2))
+
+        # calculate the change in div compared to previous iteration
+        div_delta = abs(div - div_previous)
+
+        # determine if converged, stable, diverged
+        converged = True if div <= div_aim else False
+        stable = True if div_delta <= div_delta_aim else False
+        diverged = True if div > div_max else False
+
+        return div, converged, stable, diverged
+
+
+    # reset attributes that are specified (e.g. that are supposed to be fixed)
+    def reset_attributes(self,
+                         attr_to_reset: dict
+                         ) -> 'Galaxy':
+        """Resets attributes from dict. Default resets mhalo,mgas,mout to value of prev. timestep, keeping them fixed"""
+
+        # reset each attribute in turn
+        for attr, value in attr_to_reset.items():
+            setattr(self, attr, value)
+
+        return self
 
 
     # ------------------------------
