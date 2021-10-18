@@ -304,6 +304,8 @@ class Galaxy:
             fixed_attr = {'mhalo': newgal.mhalo,
                           'mgas': newgal.mgas,
                           'mout': newgal.mout}
+        # make sure z stays fixed during burn-in
+        fixed_attr.update({'z': newgal.z})
 
         # set div to highest allowed value as initial value
         div = div_max
