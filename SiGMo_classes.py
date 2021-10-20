@@ -294,18 +294,16 @@ class Galaxy:
         # create new galaxy with initial values
         newgal = cls(*args, **kwargs)
 
-        # set dicts with fixed attributes and attributes to evaluate to default if necessary
-        if check_attr is None:
-            check_attr = {'mstar': newgal.mstar,
-                          'SFR': newgal.SFR,
-                          'GCR': newgal.GCR,
-                          'MLR': newgal.MLR}
-        if fixed_attr is None:
-            fixed_attr = {'mhalo': newgal.mhalo,
-                          'mgas': newgal.mgas,
-                          'mout': newgal.mout}
-        # make sure z stays fixed during burn-in
-        fixed_attr.update({'z': newgal.z})
+        # set dict with attributes to evaluate to default, or supplement it with object attribute values, if necessary
+        default_check_attr = ['mstar', 'SFR', 'GCR', 'MLR']
+        check_attr = newgal.attr_to_dict(check_attr, default_check_attr)
+
+        # set dict with fixed attributes to default, or supplement it with object attribute values, if necessary
+        default_fixed_attr = ['mhalo', 'mgas']
+        fixed_attr = newgal.attr_to_dict(fixed_attr, default_fixed_attr)
+
+        # make sure z and mout stay fixed during burn-in no matter the user-input
+        fixed_attr.update({'z': newgal.z, 'mout': newgal.mout})
 
         # set div to highest allowed value as initial value
         div = div_max
@@ -347,6 +345,37 @@ class Galaxy:
                 break
 
         return newgal
+
+
+    # helper-method to set object attribute values as dict values
+    def attr_to_dict(self,
+                     attr = None,
+                     default_attr = None
+                     ) -> dict:
+        """Make dict from list or dict of desired or default attributes using object attribute values"""
+
+        # if attr dict or list is not supplied: use default or abort
+        if attr is None:
+            # if default_attr are supplied
+            if default_attr is not None:
+                attr = default_attr
+            else:
+                print("Setting values from object attributes failed:\n"
+                      "Neither input nor default attributes set")
+
+        # if attr was already supplied as dict, but values not set (set to None)
+        if type(attr) is dict:
+            for key, value in attr.items():
+                if value is None:
+                    attr[key] = getattr(self, key)
+        # if attr was supplied as list
+        elif type(attr) is list:
+            new_check_attr = {}
+            for key in attr:
+                new_check_attr[key] = getattr(self, key)
+            attr = new_check_attr
+
+        return attr
 
 
     # check for convergence, stability and divergence in specified attributes
