@@ -161,7 +161,7 @@ class Galaxy:
         The change rate ∂/∂t in gas mass content of the galaxy (default 0.)
     HLF : float, optional
         The halo loss fraction - fraction of baryons that get expelled by feedback
-        not only from the galaxy but also from the galaxy together (default 0.1)
+        not only from the galaxy but also from the halo altogether (default 0.1)
     IRF: float, optional
         The fraction of gas being converted to stars that is promptly,
         here instantly, returned to the gas reservoir (default 0.4)
@@ -289,6 +289,7 @@ class Galaxy:
     # classmethod to create a galaxy and 'burn it in' by trying to find a (quasi-)equilibrium state
     @classmethod
     def with_burnin(cls,
+                    cycle_steps: int = 5,
                     cycles_max: int = 1e6,
                     check_attr: dict = None,
                     div_aim: float = 1.e-3,
@@ -327,26 +328,33 @@ class Galaxy:
             for attr, value in check_attr.items():
                 check_attr[attr] = getattr(newgal, attr)
 
-            # evolve for one timestep
-            newgal.intuitive_evolve(timestep=vartime)
+            # evolve for specified nuber of timesteps within this one cycle
+            for i in range(cycle_steps):
+                newgal.intuitive_evolve(timestep=vartime)
 
             # check for convergence, stability and divergence
-            div, converged, stable, diverged = newgal.check_for_convstabdiv(attr_to_check=check_attr,
-                                                                            div_aim=div_aim,
-                                                                            div_delta_aim=div_delta_aim,
-                                                                            div_max=div_max)
+            div, attr_div, converged, stable, diverged = newgal.check_for_convstabdiv(attr_to_check=check_attr,
+                                                                                      div_aim=div_aim,
+                                                                                      div_delta_aim=div_delta_aim,
+                                                                                      div_max=div_max)
+            print("div =", div)
+
+            attr_div_str = "\n                 ".join(f"{key} = {value}" for key, value in attr_div.items())
+
             if converged:
-                print(f"Burn-in converged after {cycle} cycles")
+                print(f"Burn-in converged after {cycle} cycles ({cycle_steps} timesteps each)")
+                print(f"Overall div:     div = {div} < {div_aim} = div_aim")
+                print(f"Individual divs: " + attr_div_str)
                 break
             else:
                 if diverged:
-                    print(f"Warning: burn-in diverged after {cycle} cycles!")
+                    print(f"Warning: burn-in diverged after {cycle} cycles ({cycle_steps} timesteps each)!")
                     break
                 else:
                     newgal.reset_attributes(fixed_attr)
             cycle += 1
             if cycle == cycles_max:
-                print(f"Warning: burn-in has not converged after maximum of {cycle} cycles,")
+                print(f"Warning: burn-in has not converged after maximum of {cycle} cycles ({cycle_steps} timesteps each),")
                 if stable:
                     print(f"but the change in attributes checked is stable")
                 else:
@@ -421,6 +429,8 @@ class Galaxy:
             value_new = getattr(self, attr)
             attr_div[attr] = (value_new - value_old) / (value_new + value_old + 1.e-7)  # avoid division by zero
 
+        print("attr_div =", attr_div)
+
         # compute combined div
         div = np.array(list(attr_div.items()))[..., 1]
         div = div.astype(float)
@@ -434,7 +444,7 @@ class Galaxy:
         stable = True if div_delta <= div_delta_aim else False
         diverged = True if div > div_max else False
 
-        return div, converged, stable, diverged
+        return div, attr_div, converged, stable, diverged
 
 
     # reset attributes that are specified (e.g. that are supposed to be fixed)
