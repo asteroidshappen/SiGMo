@@ -73,11 +73,11 @@ class Environment:
             # both supplied --> use zstart --> lookbacktime
             elif (zstart is not None) and (lookbacktime is not None):
                 print(f"Both intial redshift and lookback time are supplied!\n" +
-                      f"Will use the supllied value of z={zstart:9.2f} to calculate\n" +
+                      f"Will use the supplied value of z={zstart:9.2f} to calculate\n" +
                       f"the corresponding lookback time from it.")
             self.lookbacktime = cosmo.lookback_time(self.zstart).value  # IMPLICIT HARDCODING OF Gyr from astropy routine!
 
-        # compute zcurrent from self.zstart
+        # set self.z from self.zstart
         self.z = self.zstart
         return
 
@@ -91,10 +91,19 @@ class Environment:
 
 
     def create_Galaxy(self,
-                      **galaxy_kwargs: dict
+                      with_burnin=False,
+                      with_burnin_dict=None,
+                      *galaxy_args,
+                      **galaxy_kwargs
                       ):
         """Creates Galaxy object and adds it to galaxies list"""
-        gal = Galaxy(env=self, **galaxy_kwargs)
+        if with_burnin:
+            if not with_burnin_dict:
+                gal = Galaxy.with_burnin(env=self, **galaxy_kwargs)
+            else:
+                gal = Galaxy.with_burnin(**with_burnin_dict, env=self, **galaxy_kwargs)
+        else:
+            gal = Galaxy(env=self, **galaxy_kwargs)
         self.galaxies.append(gal)
         return gal
 
