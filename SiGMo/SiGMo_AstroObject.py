@@ -2,17 +2,120 @@
 # Imports
 
 # basic
+import copy
+import inspect
+import warnings
+
 import numpy as np
+
+# OOP
+from abc import ABC, abstractmethod
+
+# parallelisation
+import multiprocessing as mp
 
 # astronomy
 from astropy import units as u
 from astropy.cosmology import Planck18 as cosmo
 from astropy.cosmology import z_at_value
+# from astropy.cosmology import CosmologyError   # this Error was weirdly not found!!
+
+import SiGMo
 
 
-class Environment:
-    """Class for simple environment of one or more galaxies of the Galaxies
-    class.
+# ================
+# Helper Functions
+
+def exclude_keys(in_dict, excl_keys):
+    """Return shallow(?) copy of dictionary in_dict without the key-value pairs designated by excl_keys"""
+    return {key: in_dict[key] for key in in_dict if key not in excl_keys}
+
+
+# ========================================================================
+# Abstract Base Class for all AstroObjects (for Environment, Halo, Galaxy)
+
+class AstroObject(ABC):
+    """Abstract base class that just provides common attributes and methods for all different AstroObject subclasses"""
+    @abstractmethod
+    def __init__(self):
+        self.name = None
+        return
+
+    @abstractmethod
+    def evolve(self):
+        return
+
+    def make_snapshot(self) -> 'Snapshot':
+        """Returns the current values of all major attributes as dict,
+        replaces instances of the subclasses of AstroObject by their name attribute"""
+        _tmp_in = dict(vars(self))
+
+        # search for lists and straight-up AstroObjects and build _tmp_exclude dict to exclude them from deepcopy.
+        # replace instances and lists (with possible instances) of AstroObject subclasses with their 'name' attribute
+        # use-case: env, halos, galaxies will usually contain those, but including them in the deepcopy results in
+        # circular references and very deep copying (e.g. env contains galaxy, that has its env, that has the galaxy...)
+        _tmp_exclude = {}
+        for attr, value in _tmp_in.items():
+            if isinstance(value, AstroObject):  # straight-up instance of an AstroObject subclass
+                _tmp_exclude[attr] = value.name
+            elif isinstance(value, list):  # list of (possible) instances of AstroObject subclass(es)
+                _tmp_exclude[attr] = []
+                for value_i in value:
+                    if isinstance(value_i, AstroObject):
+                        _tmp_exclude[attr].append(value_i.name)
+                    else:
+                        _tmp_exclude[attr].append(value_i)
+
+        # copy the _tmp_in dict but exclude keys that have lists or straight-up AstroObjects as values
+        _tmp_out = copy.deepcopy(exclude_keys(_tmp_in, _tmp_exclude.keys()))
+
+        # update _tmp_out with the key-value pairs prev. excluded from deepcopy (and modified to remove AstroObjects)
+        _tmp_out = _tmp_out | _tmp_exclude
+
+        return SiGMo.Snapshot(_tmp_out)
+
+    # # Old functioning make_snapshot() method, but super-inefficient because it makes deepcopy of everything everytime
+    # def make_snapshot(self) -> 'Snapshot':
+    #     """Returns the current values of all major attributes as dict,
+    #     replaces instances of the subclasses of AstroObject by their name attribute"""
+    #     _tmp_out = copy.deepcopy(dict(vars(self)))
+    #
+    #     # replace instances and lists of instances of AstroObject subclasses with their 'name' attribute
+    #     # use-case: env, halos, galaxies will usually contain those, but including them in a snapshot results in
+    #     # circular or at least references (e.g. env contains galaxy, that has its env, that contains the galaxy, ad inf)
+    #     for attr, value in _tmp_out.items():
+    #         if isinstance(value, AstroObject):  # straight-up instance of a AstroObject subclass
+    #             _tmp_out[attr] = value.name
+    #         elif isinstance(value, list):  # list of instances of AstroObject subclass(es)
+    #             for i, value_i in enumerate(value):
+    #                 if isinstance(value_i, AstroObject):
+    #                     _tmp_out[attr][i] = value_i.name
+    #
+    #     return SiGMo.Snapshot(_tmp_out)
+
+    def __repr__(self) -> str:
+        """Return representation of respective AstroObject. Uses self.make_snapshot() to get values, which have
+        therefore already been cleansed of any AstroObjects referenced in the attributes (replaced by their 'name')"""
+        snapshot = self.make_snapshot()
+        r_string = ", ".join("=".join((str(k), repr(v))) for k, v in snapshot.data.items())
+
+        return f'{type(self).__name__}({r_string})'
+
+
+    def __str__(self) -> str:
+        """Return more user-friendly output for AstroObject. Uses self.make_snapshot() to get values, which have
+        therefore already been cleansed of any AstroObjects referenced in the attributes (replaced by their 'name')"""
+        snapshot = self.make_snapshot()
+        s_string = "\n".join(" = ".join(("  " + str(k), str(v))) for k, v in snapshot.data.items())
+
+        return f'Instance of {type(self).__name__}() with the following attributes:\n' + s_string
+
+
+# ===============================
+# Class for the environment that one or many halos and galaxies live(s) in
+
+class Environment(AstroObject):
+    """Class for simple environment of one or more halos of the Halo class.
 
     Attributes
     ----------
@@ -22,6 +125,8 @@ class Environment:
         List of all Galaxy objects in this environment (default None)
     lookbacktime : float, optional
         The current cosmic lookback time (default None)
+    mdm : float, optional
+        The amount of dark matter available in the environment (default np.inf)
     mgas : float, optional
         The amount of gas available in the environment (default np.inf)
     name : str, optional
@@ -44,16 +149,21 @@ class Environment:
     def __init__(self,
                  age: float = 0.,
                  galaxies: list = None,
+                 halos: list = None,
                  lookbacktime: float = None,
+                 mdm: float = np.inf,
                  mgas: float = np.inf,
                  name: str = 'Test_Env',
-                 zstart: float = 6.
+                 zstart: float = None
                  ):
         self.age = age
         self.galaxies = galaxies if galaxies else []
+        self.halos = halos if halos else []
         self.lookbacktime = lookbacktime
+        self.mdm = mdm
         self.mgas = mgas
         self.name = name
+        self.previous = None
         self.zstart = zstart
 
         # make either lookbacktime from zstart or vice versa
@@ -81,13 +191,180 @@ class Environment:
         self.z = self.zstart
         return
 
-    def __repr__(self):
-        r_string = ", ".join("=".join((str(k),(f"List of {len(v)} Galaxy() objects{'' if len(v) == 0 else ': '}" + ', '.join(f"'{g.name}'" for g in v) if k == 'galaxies' else str(v)))) for k,v in vars(self).items())
-        return f'Environment({r_string})'
 
-    def __str__(self):
-        s_string = "\n".join(" = ".join(("  " + str(k),(f"List of {len(v)} Galaxy() objects{'' if len(v) == 0 else ': '}" + ', '.join(f"'{g.name}'" for g in v) if k == 'galaxies' else str(v)))) for k,v in vars(self).items())
-        return f'Instance of Environment() with the following attributes:\n' + s_string
+    def create_Halo(self,
+                    *halo_args,
+                    **halo_kwargs
+                    ):
+        """Creates Halo object and adds it to halos list"""
+        halo = Halo(env=self, *halo_args, **halo_kwargs)
+        self.halos.append(halo)
+        return halo
+
+
+    def evolve(self,
+               mode: str = "intuitive",
+               timestep: float = 1.e-3,
+               runparallel: bool = False
+               ):
+        """Evolve Environment and all halos/galaxies either intuitively or per Lilly+13, Eq.12a-14a, acc. to 'mode'"""
+        # store snapshot of previous state before anything gets changed
+        self.previous = None
+        self.previous = self.make_snapshot()
+
+        # make the time step in lookbacktime, then convert to z as well
+        self.lookbacktime -= timestep
+        # self.z = z_at_value(cosmo.age, cosmo.age(0) - self.lookbacktime * u.Gyr)  # Gyr HARDCODED AGAIN!
+        try:
+            self.z = z_at_value(cosmo.age, cosmo.age(0) - self.lookbacktime * u.Gyr)  # Gyr HARDCODED AGAIN!
+        except:
+            z_at_value_sig = inspect.signature(z_at_value)
+            z_at_value_params = z_at_value_sig.parameters
+            zmin = z_at_value_params["zmin"].default
+            if self.lookbacktime * u.Gyr <= cosmo.age(0) - cosmo.age(zmin):    # Gyr HARDCODED AGAIN!
+                # use linear interpolation between z=zmin and z=0 instead of jumping straight to z=0 below zmin
+                if self.lookbacktime > 0:
+                    lin_fact = self.lookbacktime / cosmo.age(zmin).value
+                    self.z = lin_fact * zmin
+                else:
+                    self.z = 0.
+                    print("WARNING: at least one timestep overshot beyond redshift 0 !!!")
+            else:
+                raise
+
+        # go through all the halos and evolve/update them based on new time
+        if (mode == "reference") or (mode == "intuitive"):  # HARDCODED the two different modes
+            if runparallel:
+                with mp.Pool(mp.cpu_count()-1) as pool:    # HARDCODED the number of CPUs as available CPUs - 1
+                    result_snps = pool.starmap(Halo.evolve, [(halo, mode, timestep) for halo in self.halos])
+                    pool.close()
+            else:
+                for halo in self.halos:
+                    halo.evolve(mode=mode, timestep=timestep)
+        else:
+            warnings.warn("Unsupported keyword for 'mode' in Environment.evolve(). \n"
+                          ""f"Environment '{self.name}' was not evolved")
+
+        return self.make_snapshot()
+
+    def write_all_snapshots(self, index, n_steps, outdir):
+        """
+        Writes snapshots of the Environment self and of all linked Halos and Galaxies to disk
+        :param index: unique identifier for this whole set of snapshots, e.g. number of the timestep
+        :param n_steps: maximum number of the identifier index
+        :param outdir: output directory for all snapshot files
+        :return: no return value
+        """
+        snp = self.make_snapshot()
+        snp.save_to_disk(outdir / snp.autoname_with_index(index, n_steps))
+        for halo in self.halos:
+            # write all Halos in the Environment to disk
+            snp = halo.make_snapshot()
+            snp.save_to_disk(outdir / snp.autoname_with_index(index, n_steps))
+            for gal in halo.galaxies:
+                # write all Galaxies in this Halo to disk
+                snp = gal.make_snapshot()
+                snp.save_to_disk(outdir / snp.autoname_with_index(index, n_steps))
+        return
+
+
+# ========================================================
+# Class for the halo that lives in one environment and that one or many galaxies live(s) in
+
+
+class Halo(AstroObject):
+    """Class for simple halo with one or more galaxies of the Galaxy class.
+
+    Attributes
+    ----------
+    age : float, optional
+        The current age of the system in Gyrs (default 0.)
+    BDR : float, optional
+        The ratio of (gaseous) baryonic to dark matter entering the halo (default 0.2)
+    DCR : float, optional
+        The dark matter mass change rate (accretion) of the halo (default 0.)
+    < fgal : float, optional
+        The fraction of baryons that enter the halo and make it all the way down
+        into the "regulator system" to participate in star formation etc
+    galaxies : list, optional
+        List of all Galaxy objects in this environment (default None)
+    GCR: float, optional
+        The change rate ∂/∂t in gas mass content of the halo (default 0.)
+    HLF : float, optional
+        The halo loss fraction - fraction of baryons that get expelled by feedback
+        not only from the galaxy but also from the halo altogether (default 0.1)
+    lookbacktime : float, optional
+        The current cosmic lookback time (default None)
+    mdm : float, optional
+        The amount of dark matter available in the halo (default np.inf)
+    mgas : float, optional
+        The amount of gas available in the environment (default np.inf)
+    MIR : float, optional
+        The total mass increase rate (accretion) of the halo with mass mtot (default 0.)
+    mtot : float, optional
+        The total mass of the halo that the galaxy resides in (default 1.e12)
+    name : str, optional
+        The name of the galaxy (default 'Test_Env')
+    sMIR : float, optional
+        The specific mass increase rate (accretion) of the DM halo (default 0.)
+    z : float, optional
+        The current redshift of the system (default None)
+    zstart : float, optional
+        The initial redshift of the system (default 6.)
+
+    Methods
+    -------
+    create_Galaxy(galaxy_kwargs: dict = None)
+        Creates Galaxy object and adds it to galaxies list
+    reference_evolve(timestep: float = 1.e-3)
+        Evolves the environment and all galaxies acc. to Lilly+13, Eq.12a,13a,14a
+    intuitive_evolve(timestep: float = 1.e-3)
+        Evolves the Environment and all galaxies in it in an 'intuitive' fashion
+    """
+
+    def __init__(self,
+                 env: Environment,
+                 age: float = None,
+                 BDR: float = 0.15,
+                 DCR: float = None,  # used to be 0.
+                 # fgal: float = 1.,
+                 galaxies: list = None,
+                 GCR: float = None,  # used to be 0.
+                 HLF: float = 0.1,
+                 lookbacktime: float = None,
+                 mdm: float = None,
+                 mgas: float = None,
+                 MIR: float = None,
+                 mtot: float = None,
+                 name: str = "Test_Halo",
+                 sMIR: float = None,
+                 z: float = None
+                 ):
+        self.env = env
+        self.age = self.env.age if age is None else age
+        self.BDR = BDR
+        self.DCR = DCR
+        # self.fgal = fgal
+        self.galaxies = [] if galaxies is None else galaxies
+        self.GCR = GCR
+        self.HLF = HLF
+        self.lookbacktime = self.env.lookbacktime if lookbacktime is None else lookbacktime
+        self.mdm = mdm
+        self.mgas = mgas
+        self.MIR = MIR
+        self.mtot = self.compute_mtot() if mtot is None else mtot
+        self.name = name
+        self.previous = None
+        self.sMIR = sMIR
+        self.z = env.z if z is None else z
+
+        # re-set sMIR and MIR: don't want to set them properly earlier b/c order of attr. wouldn't be alphabetic
+        self.sMIR = self.compute_sMIR() if self.sMIR is None else sMIR
+        self.MIR = self.compute_MIR() if self.MIR is None else self.MIR
+        # re-set DCR and GCR: they depend on MIR, and GCR on some additional stuff
+        self.DCR = self.compute_DCR() if self.DCR is None else self.DCR
+        self.GCR = self.compute_GCR() if self.GCR is None else self.GCR
+        return
 
 
     def create_Galaxy(self,
@@ -99,73 +376,268 @@ class Environment:
         """Creates Galaxy object and adds it to galaxies list"""
         if with_burnin:
             if not with_burnin_dict:
-                gal = Galaxy.with_burnin(env=self, **galaxy_kwargs)
+                gal = Galaxy.with_burnin(env=self.env, halo=self, **galaxy_kwargs)
             else:
-                gal = Galaxy.with_burnin(**with_burnin_dict, env=self, **galaxy_kwargs)
+                gal = Galaxy.with_burnin(**with_burnin_dict, env=self.env, halo=self, **galaxy_kwargs)
         else:
-            gal = Galaxy(env=self, **galaxy_kwargs)
+            gal = Galaxy(env=self.env, halo=self, **galaxy_kwargs)  # is direct reference to env still necessary?
         self.galaxies.append(gal)
         return gal
 
 
-    def reference_evolve(self,
-                         timestep: float = 1.e-3
-                         ):
-        """Evolves the Environment and all galaxies acc. to Lilly+13, Eq.12a,13a,14a"""
-        # make the time step in lookbacktime, then convert to z as well
-        self.lookbacktime -= timestep
-        self.z = z_at_value(cosmo.age, cosmo.age(0) - self.lookbacktime * u.Gyr) #, zmin=self.z-.5, zmax=self.z+.5)  # Gyr HARDCODED AGAIN!
+    def evolve(self,
+               mode: str = "intuitive",
+               timestep: float = 1.e-3
+               ):
+        """Evolve Halo and all galaxies either intuitively or per Lilly+13, Eq.12a-14a, acc. to 'mode'"""
+        # store snapshot of previous state before anything gets changed
+        self.previous = None
+        self.previous = self.make_snapshot()
 
-        # go through all the galaxies and evolve/update them based on new time
-        for gal in self.galaxies:
-            gal.reference_evolve(timestep=timestep)
+        # take lookbacktime and z (redshift) from Environment the Halo belongs to
+        self.lookbacktime = self.env.lookbacktime
+        self.z = self.env.z
+
+        # update the time-variable quantities involved, in this case
+        # MIR and through (and somewhat before) it sMIR
+        self.update_MIR()
+
+        # go through all the galaxies and evolve/update them
+        if (mode == "reference") or (mode == "intuitive"):
+            for galaxy in self.galaxies:
+                galaxy.evolve(mode=mode, timestep=timestep)
+        else:
+            warnings.warn("Unsupported keyword for 'mode' in Halo.evolve(). \n"
+                          ""f"Halo '{self.name}' was not evolved")
+
+        # update the mass change rates for the halo's mass reservoirs (dark matter and gas)
+        self.update_DCR()
+        self.update_GCR()
+
+        # update the mass reservoirs of the halo itself excluding galaxies (dark matter and gas)
+        self.update_mdm(timestep=timestep)
+        self.update_mgas(timestep=timestep)
+
+        # update the (summary) total mass of the halo including all masses of the galaxies
+        self.update_mtot()
+
+        return self.make_snapshot()
+
+
+    # ============================
+    # computing physical quantities of the halo
+
+    # DCR
+    def update_DCR(self, *args, **kwargs):
+        """Update the dark matter change rate using the compute_DCR() method"""
+        self.DCR = self.compute_DCR(*args, **kwargs)
+        return self.DCR
+
+    def compute_DCR(self,
+                    # BDR: float = None,
+                    MIR: float  = None
+                    ):
+        # BDR = self.BDR if BDR is None else BDR
+        MIR = self.MIR if MIR is None else MIR
+
+        # return MIR * (1. - BDR)   # old prescription assuming MIR was not only DM, but DM+gas, which it isn't!
+        return MIR * 1.
+
+
+    # GCR
+    def update_GCR(self, *args, **kwargs):
+        """Update the gas mass change rate using the compute_GCR() method"""
+        self.GCR = self.compute_GCR(*args, **kwargs)
         return
 
+    def compute_GCR(self,
+                    BDR: float = None,
+                    gal_fgal: list[float] = None,
+                    gal_MLR: list[float] = None,
+                    HLF: float = None,
+                    MIR: float  = None
+                    ):
+        BDR = self.BDR if BDR is None else BDR
+        HLF = self.HLF if HLF is None else HLF
+        MIR = self.MIR if MIR is None else MIR
 
-    def intuitive_evolve(self,
-                         timestep: float = 1.e-3
-                         ):
-        """Evolves the Environment and all galaxies in it in an 'intuitive' fashion"""
-        # make the time step in lookbacktime, then convert to z as well
-        self.lookbacktime -= timestep
-        self.z = z_at_value(cosmo.age, cosmo.age(0) - self.lookbacktime * u.Gyr) #, zmin=self.z-.5, zmax=self.z+.5)  # Gyr HARDCODED AGAIN!
+        # sum up all 'fractions' of how much gas reaches each galaxy
+        gal_fgal_sum = 0
+        if gal_fgal is None:
+            for gal in self.galaxies:
+                gal_fgal_sum += gal.fgal
+        else:
+            for gal_fgal_i in gal_fgal:
+                gal_fgal_sum += gal_fgal_i
+        if gal_fgal_sum > 1:
+            print("WARNING: Sum of individual galaxies' fgal > 1!"
+                  "         Galaxies accreting more than their Halo not yet supported in this model!")
 
-        # go through all the galaxies and evolve/update them based on new time
-        for gal in self.galaxies:
-            gal.intuitive_evolve(timestep=timestep)
-        return
+        gal_MLR_sum = 0
+        if gal_MLR is None:
+            for gal in self.galaxies:
+                gal_MLR_sum += gal.MLR
+        else:
+            for gal_MLR_i in gal_MLR:
+                gal_MLR_sum += gal_MLR_i
 
+        # return ((1. - gal_fgal_sum) * MIR * BDR) + ((1. - HLF) * gal_MLR_sum)   # Does MLR cut off fast enough when galaxy is depleted?
+        # (above) That was the old prescription assuming MIR included not ony DM, but also gas, which it doesn't.
+        return ((1. - gal_fgal_sum) * MIR * BDR) + ((1. - HLF) * gal_MLR_sum)   # Does MLR cut off fast enough when galaxy is depleted?
+
+
+    # mdm
+    def update_mdm(self, timestep: float, *args, **kwargs) -> float:
+        """Update the dark matter mass using the compute_mdm() method"""
+        self.mdm = self.compute_mdm(timestep, *args, **kwargs)
+        return self.mdm
+
+    def compute_mdm(self,
+                    timestep: float,
+                    DCR: float = None,
+                    mdm: float = None
+                    ) -> float:
+        DCR = self.DCR if DCR is None else DCR
+        mdm = self.mdm if mdm is None else mdm
+
+        mdm += (DCR * timestep)
+        return mdm if mdm > 0. else 0.
+
+
+    # mgas
+    def update_mgas(self, timestep: float, *args, **kwargs) -> float:
+        """Update the gas mass using the compute_mgas() method"""
+        self.mgas = self.compute_mgas(timestep, *args, **kwargs)
+        return self.mgas
+
+    def compute_mgas(self,
+                     timestep: float,
+                     gal_MLR: list[float] = None,
+                     GCR: float = None,
+                     mgas: float = None,
+                     ) -> float:
+        GCR = self.GCR if GCR is None else GCR
+        mgas = self.mgas if mgas is None else mgas
+
+        mgas += (GCR * timestep)
+
+        return mgas if mgas > 0. else 0.
+
+
+    # mtot (formerly mhalo)
+    def update_mtot(self, *args, **kwargs) -> float:
+        """Update the total halo mass using the compute_mtot() method"""
+        self.mtot = self.compute_mtot(*args, **kwargs)
+        return self.mtot
+
+    def compute_mtot(self,
+                     mdm: float = None,
+                     mgas: float = None,
+                     gal_mgas: list[float] = None,
+                     gal_mstar: list[float] = None
+                     ) -> float:
+        """Compute new total halo mass based on the halo's DM and gas reservoirs
+        (mdm and mgas) as well as all contained galaxies' gas reservoirs (mgas)
+        and stellar masses (mstar). Those are time-integrated quantities
+        This ins NOT based on previous mtot, as this is just a summary value."""
+        mdm = self.mdm if mdm is None else mdm
+        mgas = self.mgas if mgas is None else mgas
+
+        # sum of all galaxies' mgas
+        gal_mgas_sum = 0
+        if gal_mgas is None:
+            for gal in self.galaxies:
+                gal_mgas_sum += gal.mgas
+        else:
+            for gal_mgas_i in gal_mgas:
+                gal_mgas_sum += gal_mgas_i
+
+        # sum of all galaxies' mstar
+        gal_mstar_sum = 0
+        if gal_mstar is None:
+            for gal in self.galaxies:
+                gal_mstar_sum += gal.mstar
+        else:
+            for gal_mstar_i in gal_mstar:
+                gal_mstar_sum += gal_mstar_i
+
+        return mdm + mgas + gal_mgas_sum + gal_mstar_sum
+
+
+    # MIR
+    def update_MIR(self, sMIR: float = None, *args, **kwargs) -> float:
+        if sMIR is None:
+            self.update_sMIR()
+
+        self.MIR = self.compute_MIR(*args, **kwargs)
+        return self.MIR
+
+    def compute_MIR(self,
+                    mtot: float = None,
+                    sMIR: float = None
+                    ) -> float:
+        """
+        Computes the current DARK MATTER Mass Increase Rate from sMIR
+        :param mtot: Total halo mass, including all masses of all galaxies in the halo
+        :param sMIR: Specific DM mass increase rate, so DM mass increase per unit DM mass
+        :return: MIR, the current DM mass increase rate
+        """
+        mtot = self.mtot if mtot is None else mtot
+        sMIR = self.sMIR if sMIR is None else sMIR
+
+        return sMIR * mtot
+
+
+    # sMIR
+    def update_sMIR(self, *args, **kwargs) -> float:
+        self.sMIR = self.compute_sMIR(*args, **kwargs)
+        return self.sMIR
+
+    def compute_sMIR(self,
+                     mtot: float = None,
+                     z: float = None
+                     ) -> float:
+        """Computes the specific Mass Increase Rate of the DM halo
+        accoding to Lilly et al. 2013, Eq. (3), more precise version"""
+        mtot = self.mtot if mtot is None else mtot
+        z = self.z if z is None else z
+
+        return 0.027 * (mtot / 10 ** 12) ** (0.15) * (1 + z + 0.1 * ((1 + z) ** (-1.25))) ** 2.5
 
 
 # ========================================================
+# Class for the galaxy that lives in one halo, which in turn lives in one environment
 
 
-
-class Galaxy:
+class Galaxy(AstroObject):
     """Class for simple model of a galaxy. Every galaxy should be associated
-    with exactly one Environment object, which provides a method to create
-    a galaxy and add it to its galaxy list.
+    with exactly one Halo object (and through it with exactly one Environment
+    object), which provides a method to create a galaxy and add it to its galaxy list.
 
     Attributes
     ----------
     env : Environment
-        The environment object the galaxy is associated with/located in
-    BDR : float, optional
+        The environment object the galaxy is associated with/its halo is located in
+    halo : Halo
+        The halo object the galaxy is associated with/is located in
+    age : float, optional
+        The current age of the system in Gyrs (default None)
+    ^ BDR : float, optional
         The ratio of (gaseous) baryonic to dark matter entering the halo (default 0.2)
     fgal : float, optional
         The fraction of baryons that enter the halo and make it all the way down
-        into the "regulator system" to participate in star formation etc
+        into the "regulator system" to participate in star formation etc (default 0.1)
     GAR : float, optional
-        The gas accretion rate of the galaxy (default 1.e12)
+        The gas accretion rate of the galaxy (default 0.)
     GCR : float, optional
         The change rate ∂/∂t in gas mass content of the galaxy (default 0.)
-    HLF : float, optional
+    ^ HLF : float, optional
         The halo loss fraction - fraction of baryons that get expelled by feedback
         not only from the galaxy but also from the halo altogether (default 0.1)
     IRF: float, optional
         The fraction of gas being converted to stars that is promptly,
         here instantly, returned to the gas reservoir (default 0.4)
-    MIR : float, optional
+    ^ MIR : float, optional
         The mass increase rate (accretion) of the DM halo with mass mhalo (default 0.)
     MLF : float, optional
         The mass-loading factor coupling SFR and mass loss (default 0.1)
@@ -175,7 +647,7 @@ class Galaxy:
         The total mass accreted onto the galaxy (default 0.)
     mgas : float, optional
         The gas mass content of the galaxy (default 1.e10)
-    mhalo : float, optional
+    ^ mhalo : float, optional
         The total mass of the halo that the galaxy resides in (default 1.e12)
     mstar : float, optional
         The stellar mass content of the galaxy (default 1.e9)
@@ -193,7 +665,7 @@ class Galaxy:
         The star formation efficiency (default 0.01)
     SFR : float, optional
         The star formation rate in the galaxy (default 0.)
-    sMIR : float, optional
+    ^ sMIR : float, optional
         The specific mass increase rate (accretion) of the DM halo (default 0.)
     sSFR: float, optional
         The actual specific star formation rate; this sSFR does not account
@@ -219,48 +691,54 @@ class Galaxy:
 
     def __init__(self,
                  env: Environment,
-                 BDR: float = 0.2,
-                 fgal: float = 1.,
+                 halo: Halo,
+                 age: float = None,
+                 # BDR: float = 0.2,
+                 fgal: float = 0.1,
                  fgas: float = None,
                  fout: float = None,
                  fstar: float = None,
-                 GAR: float = 1.e12,
+                 GAR: float = 0.,  # THIS NEEDS TO BE CHANGED TO None AND THEN PROPERLY SET FURTHER DOWN
                  gasmassfraction: float = 1.,
-                 GCR: float = 0.,
-                 HLF: float = 0.1,
+                 GCR: float = 0.,  # THIS NEEDS TO BE CHANGED TO None AND THEN PROPERLY SET FURTHER DOWN
+                 # HLF: float = 0.1,
                  IRF: float = 0.4,
-                 MIR: float = 0.,
+                 lookbacktime: float = None,
+                 # MIR: float = 0.,
                  MLF: float = 0.1,
-                 MLR: float = 0.,
+                 MLR: float = 0.,  # THIS NEEDS TO BE CHANGED TO None AND THEN PROPERLY SET FURTHER DOWN
                  macc: float = 0.,
                  mgas: float = 1.e10,
-                 mhalo: float = 1.e12,
+                 # mhalo: float = 1.e12,
                  mstar: float = 1.e9,
                  mout: float = 0.,
                  name: str = 'Test_Gal',
-                 rsSFR: float = 0.,
-                 SFE: float = 0.01,
-                 SFR: float = 0.,
-                 sMIR: float = 0.,
-                 sSFR: float = 0.,
+                 rsSFR: float = 0.,  # THIS NEEDS TO BE CHANGED TO None AND THEN PROPERLY SET FURTHER DOWN
+                 SFE: float = 1.,
+                 SFR: float = 0.,  # THIS NEEDS TO BE CHANGED TO None AND THEN PROPERLY SET FURTHER DOWN
+                 # sMIR: float = 0.,
+                 sSFR: float = 0.,  # THIS NEEDS TO BE CHANGED TO None AND THEN PROPERLY SET FURTHER DOWN
                  z: float = None
                  ):
         self.env = env
-        self.BDR = BDR
+        self.halo = halo
+        self.age = self.halo.age if age is None else age
+        # self.BDR = BDR
         self.fgal = fgal
         self.fgas = fgas
         self.fout = fout
         self.fstar =fstar
         self.GAR = GAR
         self.GCR = GCR
-        self.HLF = HLF
+        # self.HLF = HLF
         self.IRF = IRF
-        self.MIR = MIR
+        self.lookbacktime = self.halo.lookbacktime if lookbacktime is None else lookbacktime
+        # self.MIR = MIR
         self.MLF = MLF
         self.MLR = MLR
         self.macc = macc
         self.mgas = mgas
-        self.mhalo = mhalo
+        # self.mhalo = mhalo
         self.mstar = mstar
         self.mout = mout
         self.name = name
@@ -268,19 +746,10 @@ class Galaxy:
         self.rsSFR = rsSFR
         self.SFE = SFE
         self.SFR = SFR
-        self.sMIR = sMIR
+        # self.sMIR = sMIR
         self.sSFR = sSFR
-        self.z = env.z if z is None else z
+        self.z = self.halo.z if z is None else z
         return
-
-
-    def __repr__(self):
-        r_string = ", ".join("=".join((str(k),(f"Environment() object '{v.name}'" if k == 'env' else str(v)))) for k,v in vars(self).items())
-        return f'Galaxy({r_string})'
-
-    def __str__(self):
-        s_string = "\n".join(" = ".join(("  " + str(k),(f"Environment() object '{v.name}'" if k == 'env' else str(v)))) for k,v in vars(self).items())
-        return f'Instance of Galaxy() with the following attributes:\n' + s_string
 
 
     # -------------------
@@ -471,15 +940,16 @@ class Galaxy:
 
     def reference_evolve(self,
                          timestep: float = 1.e-3
-                         ) -> dict:
+                         ) -> 'Snapshot':
         """Evolves the galaxy by one timestep according to Lilly+13 Eq.12a,13a,14a,
         ideal regulator"""
         # store snapshot of previous state before anything gets changed
         self.previous = None
         self.previous = self.make_snapshot()
 
-        # update the redshift of the galaxy to the environment's z
-        self.z = self.env.z
+        # update the lookbacktime and redshift (z) of the galaxy to the halo's values
+        self.lookbacktime = self.halo.lookbacktime
+        self.z = self.halo.z
 
         # update the time-variable quantities involved, in this case
         # GAR (and through it MIR and through the latter sMIR)
@@ -514,15 +984,16 @@ class Galaxy:
 
     def intuitive_evolve(self,
                          timestep: float = 1.e-3
-                         ) -> dict:
+                         ) -> 'Snapshot':
         """Evolves the galaxy by one timestep intuitively, *without* using
         sSFR(mstar, z) as time-dependent input (like Lilly+13 do)"""
         # store snapshot of previous state before anything gets changed
         self.previous = None
         self.previous = self.make_snapshot()
 
-        # update the redshift of the galaxy to the environment's z
-        self.z = self.env.z
+        # update the lookbacktime and redshift (z) of the galaxy to the halo's values
+        self.lookbacktime = self.halo.lookbacktime
+        self.z = self.halo.z
 
         # update the time-variable quantities involved, in this case
         # GAR (and through it MIR and through the latter sMIR)
@@ -539,8 +1010,8 @@ class Galaxy:
         self.update_mstar(timestep=timestep, mode="from unreduced SFR")
         self.update_mout(timestep=timestep)
         self.update_mgas(timestep=timestep)
-        # also update total halo mass
-        self.update_mhalo(timestep=timestep)
+        # # also update total halo mass
+        # self.update_mhalo(timestep=timestep)  # gets done now at Halo object level
 
         # update some derived quantities, here sSFR (and through it rsSFR)
         self.update_sSFR(mode='from SFR')
@@ -553,18 +1024,23 @@ class Galaxy:
         return self.make_snapshot()
 
 
-    # ---------------------------
-    # make snapshot of the system
-
-    def make_snapshot(self) -> dict:
-        """Returns the current values of all major attributes as dict"""
-        _tmp_out = dict(vars(self))
-        _tmp_out['env'] = _tmp_out['env'].name if _tmp_out['env'] is not None else None
-        return _tmp_out
+    def evolve(self,
+               mode: str = "intuitive",
+               timestep: float = 1.e-3
+               ) -> 'Snapshot':
+        if mode == "reference":
+            snp = self.reference_evolve(timestep=timestep)
+        elif mode == "intuitive":
+            snp = self.intuitive_evolve(timestep=timestep)
+        else:
+            raise ValueError("Unsupported keyword for 'mode' in Galaxy.evolve(). \n"
+                             f"Galaxy '{self.name}' was not evolved")
+        return snp
 
 
     # ----------------------------------------------------------------------------------
     # General functions usable for physical parameters that also might not change at all
+    # C U R R E N T L Y   U N U S E D
 
     # Use with different values e.g. for SFE(mstar,t), mass loading fact(mgas,t)
     def Parameter_function(self, quant, t, quant0, t0, a1, a2, a3):
@@ -584,7 +1060,6 @@ class Galaxy:
         """Partial derivative w.r.t. the quantity of the arbitrary function above"""
         return ((a1*t)/(t0*quant) *
                 (self.Parameter_function(quant, t, quant0, t0, a1, a2, a3) - a3))
-
 
 
     # ------------------------------------------
@@ -631,10 +1106,16 @@ class Galaxy:
                                 ) -> float:
         """Fraction of incoming gas added to the galaxy gas reservoir,
         based on the mgas and macc increase"""
-        delta_macc = (self.macc - self.previous["macc"]) if delta_macc is None else delta_macc
-        delta_mgas = (self.mgas - self.previous["mgas"]) if delta_mgas is None else delta_mgas
+        delta_macc = (self.macc - self.previous.data["macc"]) if delta_macc is None else delta_macc
+        delta_mgas = (self.mgas - self.previous.data["mgas"]) if delta_mgas is None else delta_mgas
 
-        return delta_mgas / delta_macc
+        # return either the fraction, or - if denominator is zero, appropriate substitute to avoid div. by 0
+        if delta_macc != 0:
+            return delta_mgas / delta_macc
+        elif delta_mgas == 0:  # assumes 0./0. to be zero (should be okay with regard to these fractions)
+            return 0.
+        else:
+            return np.inf
 
 
     # fstar
@@ -677,10 +1158,16 @@ class Galaxy:
                                  ) -> float:
         """Fraction of incoming gas converted to (long lived) stars,
         based on the mstar and macc increase"""
-        delta_macc = (self.macc - self.previous["macc"]) if delta_macc is None else delta_macc
-        delta_mstar = (self.mstar - self.previous["mstar"]) if delta_mstar is None else delta_mstar
+        delta_macc = (self.macc - self.previous.data["macc"]) if delta_macc is None else delta_macc
+        delta_mstar = (self.mstar - self.previous.data["mstar"]) if delta_mstar is None else delta_mstar
 
-        return delta_mstar / delta_macc
+        # return either the fraction, or - if denominator is zero, appropriate substitute to avoid div. by 0
+        if delta_macc != 0:
+            return delta_mstar / delta_macc
+        elif delta_mstar == 0:  # assumes 0./0. to be zero (should be okay with regard to these fractions)
+            return 0.
+        else:
+            return np.inf
 
 
     # fout
@@ -723,10 +1210,16 @@ class Galaxy:
                                 ) -> float:
         """Fraction of incoming gas expelled again from the galaxy,
         based on the mout and macc increase"""
-        delta_macc = (self.macc - self.previous["macc"]) if delta_macc is None else delta_macc
-        delta_mout = (self.mout - self.previous["mout"]) if delta_mout is None else delta_mout
+        delta_macc = (self.macc - self.previous.data["macc"]) if delta_macc is None else delta_macc
+        delta_mout = (self.mout - self.previous.data["mout"]) if delta_mout is None else delta_mout
 
-        return delta_mout / delta_macc
+        # return either the fraction, or - if denominator is zero, appropriate substitute to avoid div. by 0
+        if delta_macc != 0:
+            return delta_mout / delta_macc
+        elif delta_mout == 0:  # assumes 0./0. to be zero (should be okay with regard to these fractions)
+            return 0.
+        else:
+            return np.inf
 
 
     # # gasmassfraction
@@ -759,10 +1252,9 @@ class Galaxy:
         and calls compute_GAR() to get the new value. If the overall
         halo mass increase rate (MIR) is not provided, it also calls
         update_MIR() to compute the current value of that."""
-        if MIR is None:
-            self.update_MIR()
+        MIR = self.halo.MIR if MIR is None else MIR
 
-        self.GAR = self.compute_GAR()
+        self.GAR = self.compute_GAR(MIR=MIR)
         return self.GAR
 
     def compute_GAR(self,
@@ -775,8 +1267,8 @@ class Galaxy:
         the baryon-dark matter ratio (BDR) and the fraction of
         infalling gas that makes it deep enough into the galaxy
         to participate in star formation etc."""
-        MIR = self.MIR if MIR is None else MIR
-        BDR = self.BDR if BDR is None else BDR
+        MIR = self.halo.MIR if MIR is None else MIR
+        BDR = self.halo.BDR if BDR is None else BDR
         fgal = self.fgal if fgal is None else fgal
 
         return MIR * BDR * fgal
@@ -817,7 +1309,7 @@ class Galaxy:
         from overall accretion of gas into the galaxy, minus the gas that is
         expelled or turned into (long or short lived aka any kind of) stars.
         The instant return of gas from short lived stars is handled at the
-        level of the integration of mstar, mgas"""
+        level of the integration of mstar, mgas (THE LAST BIT IS PROBABLY NOT TRUE ANYMORE!!!)"""
         GAR = self.GAR if GAR is None else GAR
         IRF = self.IRF if IFR is None else IFR
         MLR = self.MLR if MLR is None else MLR
@@ -846,7 +1338,8 @@ class Galaxy:
         GAR = self.GAR if GAR is None else GAR
         macc = self.macc if macc is None else macc
 
-        return macc + (GAR * timestep)
+        macc += (GAR * timestep)
+        return macc if macc > 0. else 0.
 
 
     # mgas
@@ -869,50 +1362,51 @@ class Galaxy:
         GCR = self.GCR if GCR is None else GCR
         mgas = self.mgas if mgas is None else mgas
 
-        return mgas + (GCR * timestep)
+        mgas += (GCR * timestep)
+        return mgas if mgas > 0. else 0.
 
 
-    # mhalo
-    def update_mhalo(self, timestep: float, *args, **kwargs) -> float:
-        """Update the halo mass using the compute_mhalo() method"""
-        self.mhalo = self.compute_mhalo(timestep, *args, **kwargs)
-        return self.mhalo
+    # # mhalo
+    # def update_mhalo(self, timestep: float, *args, **kwargs) -> float:
+    #     """Update the halo mass using the compute_mhalo() method"""
+    #     self.mhalo = self.compute_mhalo(timestep, *args, **kwargs)
+    #     return self.mhalo
+    #
+    # def compute_mhalo(self,
+    #                   timestep: float,
+    #                   HLF: float = None,
+    #                   mhalo: float = None,
+    #                   mout: float = None,
+    #                   MIR: float = None,
+    #                   ) -> float:
+    #     """Compute new halo mass based on previous mhalo, mass increase rate
+    #     and time step (integration), as well as precomputed (already integrated)
+    #     baryonic mass loss from the galaxy into the halo and the fraction of
+    #     which is also fully lost from the halo"""
+    #     HLF = self.HLF if HLF is None else HLF
+    #     mhalo = self.mhalo if mhalo is None else mhalo
+    #     mout = self.mout if mout is None else mout
+    #     MIR = self.MIR if MIR is None else MIR
+    #
+    #     return mhalo + (MIR * timestep) - (HLF * mout)
 
-    def compute_mhalo(self,
-                      timestep: float,
-                      HLF: float = None,
-                      mhalo: float = None,
-                      mout: float = None,
-                      MIR: float = None,
-                      ) -> float:
-        """Compute new halo mass based on previous mhalo, mass increase rate
-        and time step (integration), as well as precomputed (already integrated)
-        baryonic mass loss from the galaxy into the halo and the fraction of
-        which is also fully lost from the halo"""
-        HLF = self.HLF if HLF is None else HLF
-        mhalo = self.mhalo if mhalo is None else mhalo
-        mout = self.mout if mout is None else mout
-        MIR = self.MIR if MIR is None else MIR
 
-        return mhalo + (MIR * timestep) - (HLF * mout)
-
-
-    # MIR
-    def update_MIR(self, sMIR: float = None, *args, **kwargs) -> float:
-        if sMIR is None:
-            self.update_sMIR()
-
-        self.MIR = self.compute_MIR(*args, **kwargs)
-        return self.MIR
-
-    def compute_MIR(self,
-                    mhalo: float = None,
-                    sMIR: float = None
-                    ) -> float:
-        mhalo = self.mhalo if mhalo is None else mhalo
-        sMIR = self.sMIR if sMIR is None else sMIR
-
-        return sMIR * mhalo
+    # # MIR
+    # def update_MIR(self, sMIR: float = None, *args, **kwargs) -> float:
+    #     if sMIR is None:
+    #         self.update_sMIR()
+    #
+    #     self.MIR = self.compute_MIR(*args, **kwargs)
+    #     return self.MIR
+    #
+    # def compute_MIR(self,
+    #                 mhalo: float = None,
+    #                 sMIR: float = None
+    #                 ) -> float:
+    #     mhalo = self.mhalo if mhalo is None else mhalo
+    #     sMIR = self.sMIR if sMIR is None else sMIR
+    #
+    #     return sMIR * mhalo
 
 
     # MLR
@@ -967,7 +1461,8 @@ class Galaxy:
         MLR = self.MLR if MLR is None else MLR
         mout = self.mout if mout is None else mout
 
-        return mout + (MLR * timestep)
+        mout += (MLR * timestep)
+        return mout if mout > 0. else 0.
 
 
     # mstar
@@ -996,7 +1491,8 @@ class Galaxy:
         mstar = self.mstar if mstar is None else mstar
         SFR = self.SFR if SFR is None else SFR
 
-        return mstar + (SFR * timestep)
+        mstar += (SFR * timestep)
+        return mstar if mstar > 0. else 0.
 
     def compute_mstar_from_unreduced_SFR(self,
                                          timestep: float,
@@ -1009,7 +1505,8 @@ class Galaxy:
         mstar = self.mstar if mstar is None else mstar
         SFR = self.SFR if SFR is None else SFR
 
-        return mstar + ((1 - IRF) * SFR * timestep)
+        mstar += ((1 - IRF) * SFR * timestep)
+        return mstar if mstar > 0. else 0.
 
     # rsSFR
     def update_rsSFR(self,
@@ -1089,21 +1586,21 @@ class Galaxy:
         return SFE * mgas
 
 
-    # sMIR
-    def update_sMIR(self, *args, **kwargs) -> float:
-        self.sMIR = self.compute_sMIR(*args, **kwargs)
-        return self.sMIR
-
-    def compute_sMIR(self,
-                     mhalo: float = None,
-                     z: float = None
-                     ) -> float:
-        """Computes the specific Mass Increase Rate of the DM halo
-        accoding to Lilly et al. 2013, Eq. (3), more precise version"""
-        mhalo = self.mhalo if mhalo is None else mhalo
-        z = self.z if z is None else z
-
-        return 0.027 * (mhalo / 10**12)**(0.15) * (1 + z + 0.1*((1 + z)**(-1.25)))**2.5
+    # # sMIR
+    # def update_sMIR(self, *args, **kwargs) -> float:
+    #     self.sMIR = self.compute_sMIR(*args, **kwargs)
+    #     return self.sMIR
+    #
+    # def compute_sMIR(self,
+    #                  mhalo: float = None,
+    #                  z: float = None
+    #                  ) -> float:
+    #     """Computes the specific Mass Increase Rate of the DM halo
+    #     accoding to Lilly et al. 2013, Eq. (3), more precise version"""
+    #     mhalo = self.mhalo if mhalo is None else mhalo
+    #     z = self.z if z is None else z
+    #
+    #     return 0.027 * (mhalo / 10**12)**(0.15) * (1 + z + 0.1*((1 + z)**(-1.25)))**2.5
 
 
     # sSFR
