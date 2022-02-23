@@ -118,7 +118,46 @@ class AstroObject(ABC):
         """Returns the current values of all major attributes as dict, including lower-in-hierarchy objects, and
         replaces instances of the higher-in-hierarchy subclasses of AstroObject by their name attribute
         """
-        return
+        _tmp_in = dict(vars(self))
+
+        # search for lists and straight-up AstroObjects higher in the hierarchy and build _tmp_exclude dict to exclude
+        # them from deepcopy. Replace higher-up instances and lists (with possible higher-up instances) of AstroObject
+        # subclasses with their 'name' attribute.
+        # use-case: env, halos, galaxies will usually contain those, but including them in the deepcopy results in
+        # circular references and very deep copying (e.g. env contains galaxy, that has its env, that has the galaxy...)
+
+        if isinstance(self, Environment):  # for the case of an Environment object: go 2 additional levels deep
+            # do single, zero depth dict first (like in make_single_snapshot)
+            _tmp_out = exclude_by_class(in_dict=_tmp_in, excl_class=AstroObject)
+            for i, halo in enumerate(self.halos):
+                # replace the list of halo names by dicts with zero depth halo properties
+                #
+                # CONTINUE HERE - MISSING CODE
+                #
+                for j, gal in enumerate(halo.galaxies):
+                    # replace the list of galaxy names by dicts with zero depth galaxy properties
+                    #
+                    # CONTINUE HERE - MISSING CODE
+                    #
+                    pass
+            # generate snapshot from this dict
+            _snp = SiGMo.Snapshot(_tmp_out)
+        elif isinstance(self, Halo):  # for the case of a Halo object: go 1 additional level deep
+            _tmp_out = exclude_by_class(in_dict=_tmp_in, excl_class=AstroObject)
+            for i, gal in enumerate(self.galaxies):
+                # replace the list of galaxy names by dicts with zero depth galaxy properties
+                #
+                # CONTINUE HERE - MISSING CODE
+                #
+                pass
+            # generate snapshot from this dict
+            _snp = SiGMo.Snapshot(_tmp_out)
+        elif isinstance(self, Galaxy):  # for the case of a Galaxy object: no additional levels needed
+            _snp = self.make_single_snapshot()
+        else:
+            raise TypeError(f'Objects of type {type(self)} are not supported by make_multi_snapshot()')
+
+        return _snp
 
     # # Old functioning make_snapshot() method, but super-inefficient because it makes deepcopy of everything everytime
     # def make_snapshot(self) -> 'Snapshot':
