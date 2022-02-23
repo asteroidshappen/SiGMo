@@ -26,9 +26,37 @@ import SiGMo
 # ================
 # Helper Functions
 
-def exclude_keys(in_dict, excl_keys):
+def exclude_keys(in_dict, excl_keys) -> dict:
     """Return shallow(?) copy of dictionary in_dict without the key-value pairs designated by excl_keys"""
     return {key: in_dict[key] for key in in_dict if key not in excl_keys}
+
+def exclude_by_class(in_dict, excl_class) -> dict:
+    """
+    Excludes objects of a certain class/set of classes in a dictionary, and replaces them with their name attribute
+    :param in_dict: dictionary from which the objects of specified class(es) shall be removed
+    :param excl_class: class or list of classes, objects of which shall be removed (up to 1 list level deep)
+    :return: returns a copy of the in_dict, with objects of type(s) excl_class removed and replaced by their name attr.
+    """
+    _tmp_exclude = {}
+    for attr, value in in_dict.items():
+        if isinstance(value, excl_class):  # straight-up instance of an AstroObject subclass
+            _tmp_exclude[attr] = value.name
+        elif isinstance(value, list):  # list of (possible) instances of AstroObject subclass(es)
+            _tmp_exclude[attr] = []
+            for value_i in value:
+                if isinstance(value_i, excl_class):
+                    _tmp_exclude[attr].append(value_i.name)
+                else:
+                    _tmp_exclude[attr].append(value_i)
+
+    # copy the _tmp_in dict but exclude keys that have lists or straight-up AstroObjects as values
+    _tmp_out = copy.deepcopy(exclude_keys(in_dict, _tmp_exclude.keys()))
+
+    # update _tmp_out with the key-value pairs prev. excluded from deepcopy (and modified to remove AstroObjects)
+    _tmp_out = _tmp_out | _tmp_exclude
+
+    return _tmp_out
+
 
 
 # ========================================================================
