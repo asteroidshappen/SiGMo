@@ -1,17 +1,10 @@
-# I/O (ujson much faster than regular json, but orjson should be even faster but more complicated to install)
-import json
-# try:
-#     import ujson as json
-# except ImportError:
-#     import json
-
+# I/O
+import jsons
 import os
 
 # date and time
 from datetime import datetime
 
-# # Making copies
-# import copy
 
 # Defining additional helper methods
 def join_paths(path1, path2):
@@ -39,7 +32,7 @@ def split_path_and_name(inpath, sep='_'):
     return dirpath, filename, prefix, basename, snaptime, extension
 
 
-# Snapshot Class: just a dict with its own class name for easy identification
+# Snapshot Class: custom class with a dict that contains all of one AstroObject's attributes
 class Snapshot:
 
     def __init__(self, *args, **kwargs):
@@ -70,10 +63,6 @@ class Snapshot:
         """Representation of the object. Concise overview, object cannot be created by running eval on this"""
         r_string = ", ".join("=".join((str(k), repr(v))) for k, v in vars(self).items())
         return f"{type(self).__name__}({r_string})"
-
-    # def __copy__(self):
-    #     """Shallow copy implemented using the Lib/copy.py module"""
-    #     return copy.copy(self)
 
     def __eq__(self, other):
         """Check whether contents (data and meta-attributes) are the same, using self.__dict__"""
