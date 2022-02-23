@@ -45,9 +45,21 @@ class AstroObject(ABC):
     def evolve(self):
         return
 
-    def make_snapshot(self) -> 'Snapshot':
+    def make_snapshot(self, single_snapshot=True) -> 'Snapshot':
+        """Returns the current values of all major attributes of this AstroObject as dict,
+        and if single_snapshot=False, it also includes the cleaned-up versions of the lower-in-hierarchy
+        AstroObjects in the Snapshot
+        """
+        if single_snapshot:
+            return self.make_single_snapshot()
+        else:
+            return self.make_multi_snapshot()
+
+    def make_single_snapshot(self) -> 'Snapshot':
         """Returns the current values of all major attributes as dict,
-        replaces instances of the subclasses of AstroObject by their name attribute"""
+        replaces instances of the subclasses of AstroObject by their name attribute.
+        (This is the original, already copy-optimised make_snapshot method that only ever did single snapshotss)
+        """
         _tmp_in = dict(vars(self))
 
         # search for lists and straight-up AstroObjects and build _tmp_exclude dict to exclude them from deepcopy.
@@ -73,6 +85,12 @@ class AstroObject(ABC):
         _tmp_out = _tmp_out | _tmp_exclude
 
         return SiGMo.Snapshot(_tmp_out)
+
+    def make_multi_snapshot(self):
+        """Returns the current values of all major attributes as dict, including lower-in-hierarchy objects, and
+        replaces instances of the higher-in-hierarchy subclasses of AstroObject by their name attribute
+        """
+        return
 
     # # Old functioning make_snapshot() method, but super-inefficient because it makes deepcopy of everything everytime
     # def make_snapshot(self) -> 'Snapshot':
