@@ -114,7 +114,7 @@ class AstroObject(ABC):
 
         return SiGMo.Snapshot(_tmp_out)
 
-    def make_multi_snapshot(self):
+    def make_multi_snapshot(self) -> 'Snapshot':
         """Returns the current values of all major attributes as dict, including lower-in-hierarchy objects, and
         replaces instances of the higher-in-hierarchy subclasses of AstroObject by their name attribute
         """
@@ -131,25 +131,23 @@ class AstroObject(ABC):
             _tmp_out = make_copy_exclude_items_by_class(in_dict=_tmp_in, excl_class=AstroObject)
             for i, halo in enumerate(self.halos):
                 # replace the list of halo names by dicts with zero depth halo properties
-                #
-                # CONTINUE HERE - MISSING CODE
-                #
+                _tmp_halo_in = dict(vars(halo))
+                _tmp_halo_out = make_copy_exclude_items_by_class(in_dict=_tmp_halo_in, excl_class=AstroObject)
+                _tmp_out["halos"][i] = _tmp_halo_out
                 for j, gal in enumerate(halo.galaxies):
                     # replace the list of galaxy names by dicts with zero depth galaxy properties
-                    #
-                    # CONTINUE HERE - MISSING CODE
-                    #
-                    pass
+                    _tmp_gal_in = dict(vars(gal))
+                    _tmp_gal_out = make_copy_exclude_items_by_class(in_dict=_tmp_gal_in, excl_class=AstroObject)
+                    _tmp_out["halos"][i]["galaxies"][j] = _tmp_gal_out
             # generate snapshot from this dict
             _snp = SiGMo.Snapshot(_tmp_out)
         elif isinstance(self, Halo):  # for the case of a Halo object: go 1 additional level deep
             _tmp_out = make_copy_exclude_items_by_class(in_dict=_tmp_in, excl_class=AstroObject)
             for i, gal in enumerate(self.galaxies):
                 # replace the list of galaxy names by dicts with zero depth galaxy properties
-                #
-                # CONTINUE HERE - MISSING CODE
-                #
-                pass
+                _tmp_gal_in = dict(vars(gal))
+                _tmp_gal_out = make_copy_exclude_items_by_class(in_dict=_tmp_gal_in, excl_class=AstroObject)
+                _tmp_out["galaxies"][i] = _tmp_gal_out
             # generate snapshot from this dict
             _snp = SiGMo.Snapshot(_tmp_out)
         elif isinstance(self, Galaxy):  # for the case of a Galaxy object: no additional levels needed
