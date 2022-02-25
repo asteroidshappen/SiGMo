@@ -26,9 +26,37 @@ import SiGMo
 # ================
 # Helper Functions
 
-def exclude_keys(in_dict, excl_keys):
+def exclude_keys(in_dict, excl_keys) -> dict:
     """Return shallow(?) copy of dictionary in_dict without the key-value pairs designated by excl_keys"""
     return {key: in_dict[key] for key in in_dict if key not in excl_keys}
+
+def make_copy_exclude_items_by_class(in_dict, excl_class) -> dict:
+    """
+    Excludes objects of a certain class/set of classes in a dictionary, and replaces them with their name attribute
+    :param in_dict: dictionary from which the objects of specified class(es) shall be removed
+    :param excl_class: class or list of classes, objects of which shall be removed (up to 1 list level deep)
+    :return: returns a copy of the in_dict, with objects of type(s) excl_class removed and replaced by their name attr.
+    """
+    _tmp_exclude = {}
+    for attr, value in in_dict.items():
+        if isinstance(value, excl_class):  # straight-up instance of an AstroObject subclass
+            _tmp_exclude[attr] = value.name
+        elif isinstance(value, list):  # list of (possible) instances of AstroObject subclass(es)
+            _tmp_exclude[attr] = []
+            for value_i in value:
+                if isinstance(value_i, excl_class):
+                    _tmp_exclude[attr].append(value_i.name)
+                else:
+                    _tmp_exclude[attr].append(value_i)
+
+    # copy the _tmp_in dict but exclude keys that have lists or straight-up AstroObjects as values
+    _tmp_out = copy.deepcopy(exclude_keys(in_dict, _tmp_exclude.keys()))
+
+    # update _tmp_out with the key-value pairs prev. excluded from deepcopy (and modified to remove AstroObjects)
+    _tmp_out = _tmp_out | _tmp_exclude
+
+    return _tmp_out
+
 
 
 # ========================================================================
@@ -45,9 +73,28 @@ class AstroObject(ABC):
     def evolve(self):
         return
 
-    def make_snapshot(self) -> 'Snapshot':
-        """Returns the current values of all major attributes as dict,
-        replaces instances of the subclasses of AstroObject by their name attribute"""
+    def make_snapshot(self, single_snapshot: bool = True) -> 'Snapshot':
+        """
+        Returns the current values of all major attributes of this AstroObject as dict,
+        and if single_snapshot=False, it also includes the cleaned-up versions of the lower-in-hierarchy
+        AstroObjects in the Snapshot
+        :param single_snapshot: (bool) If True, return flat-ish Snapshot that has replaced all linked AstroObjects
+        with their name attribute; if False, return multi-snapshot that has replaced all above-in-hierarchy AstroObjects
+        with their names, but includes all down-in-hierarchy AstroObjects as dicts (as if in owns flat-ish Snapshots).
+        :return: Snapshot of the current object
+        """
+        if single_snapshot:
+            return self.make_single_snapshot()
+        else:
+            return self.make_multi_snapshot()
+
+    def make_single_snapshot(self) -> 'Snapshot':
+        """
+        Returns the current values of all major attributes as dict,
+        replaces instances of the subclasses of AstroObject by their name attribute.
+        (This is the original, already copy-optimised make_snapshot method that only ever did single snapshots)
+        :return: flat-ish Snapshot of current object
+        """
         _tmp_in = dict(vars(self))
 
         # search for lists and straight-up AstroObjects and build _tmp_exclude dict to exclude them from deepcopy.
@@ -73,6 +120,51 @@ class AstroObject(ABC):
         _tmp_out = _tmp_out | _tmp_exclude
 
         return SiGMo.Snapshot(_tmp_out)
+
+    def make_multi_snapshot(self) -> 'Snapshot':
+        """
+        Returns the current values of all major attributes as dict, including lower-in-hierarchy objects, and
+        replaces instances of the higher-in-hierarchy subclasses of AstroObject by their name attribute
+        :return: deep-ish Snapshot of current object
+        """
+        _tmp_in = dict(vars(self))
+
+        # search for lists and straight-up AstroObjects higher in the hierarchy and build _tmp_exclude dict to exclude
+        # them from deepcopy. Replace higher-up instances and lists (with possible higher-up instances) of AstroObject
+        # subclasses with their 'name' attribute.
+        # use-case: env, halos, galaxies will usually contain those, but including them in the deepcopy results in
+        # circular references and very deep copying (e.g. env contains galaxy, that has its env, that has the galaxy...)
+
+        if isinstance(self, Environment):  # for the case of an Environment object: go 2 additional levels deep
+            # do single, zero depth dict first (like in make_single_snapshot)
+            _tmp_out = make_copy_exclude_items_by_class(in_dict=_tmp_in, excl_class=AstroObject)
+            for i, halo in enumerate(self.halos):
+                # replace the list of halo names by dicts with zero depth halo properties
+                _tmp_halo_in = dict(vars(halo))
+                _tmp_halo_out = make_copy_exclude_items_by_class(in_dict=_tmp_halo_in, excl_class=AstroObject)
+                _tmp_out["halos"][i] = _tmp_halo_out
+                for j, gal in enumerate(halo.galaxies):
+                    # replace the list of galaxy names by dicts with zero depth galaxy properties
+                    _tmp_gal_in = dict(vars(gal))
+                    _tmp_gal_out = make_copy_exclude_items_by_class(in_dict=_tmp_gal_in, excl_class=AstroObject)
+                    _tmp_out["halos"][i]["galaxies"][j] = _tmp_gal_out
+            # generate snapshot from this dict
+            _snp = SiGMo.Snapshot(_tmp_out)
+        elif isinstance(self, Halo):  # for the case of a Halo object: go 1 additional level deep
+            _tmp_out = make_copy_exclude_items_by_class(in_dict=_tmp_in, excl_class=AstroObject)
+            for i, gal in enumerate(self.galaxies):
+                # replace the list of galaxy names by dicts with zero depth galaxy properties
+                _tmp_gal_in = dict(vars(gal))
+                _tmp_gal_out = make_copy_exclude_items_by_class(in_dict=_tmp_gal_in, excl_class=AstroObject)
+                _tmp_out["galaxies"][i] = _tmp_gal_out
+            # generate snapshot from this dict
+            _snp = SiGMo.Snapshot(_tmp_out)
+        elif isinstance(self, Galaxy):  # for the case of a Galaxy object: no additional levels needed
+            _snp = self.make_single_snapshot()
+        else:
+            raise TypeError(f'Objects of type {type(self)} are not supported by make_multi_snapshot()')
+
+        return _snp
 
     # # Old functioning make_snapshot() method, but super-inefficient because it makes deepcopy of everything everytime
     # def make_snapshot(self) -> 'Snapshot':
