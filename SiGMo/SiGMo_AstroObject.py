@@ -30,7 +30,7 @@ def exclude_keys(in_dict, excl_keys) -> dict:
     """Return shallow(?) copy of dictionary in_dict without the key-value pairs designated by excl_keys"""
     return {key: in_dict[key] for key in in_dict if key not in excl_keys}
 
-def exclude_by_class(in_dict, excl_class) -> dict:
+def make_copy_exclude_items_by_class(in_dict, excl_class) -> dict:
     """
     Excludes objects of a certain class/set of classes in a dictionary, and replaces them with their name attribute
     :param in_dict: dictionary from which the objects of specified class(es) shall be removed
@@ -128,7 +128,7 @@ class AstroObject(ABC):
 
         if isinstance(self, Environment):  # for the case of an Environment object: go 2 additional levels deep
             # do single, zero depth dict first (like in make_single_snapshot)
-            _tmp_out = exclude_by_class(in_dict=_tmp_in, excl_class=AstroObject)
+            _tmp_out = make_copy_exclude_items_by_class(in_dict=_tmp_in, excl_class=AstroObject)
             for i, halo in enumerate(self.halos):
                 # replace the list of halo names by dicts with zero depth halo properties
                 #
@@ -143,7 +143,7 @@ class AstroObject(ABC):
             # generate snapshot from this dict
             _snp = SiGMo.Snapshot(_tmp_out)
         elif isinstance(self, Halo):  # for the case of a Halo object: go 1 additional level deep
-            _tmp_out = exclude_by_class(in_dict=_tmp_in, excl_class=AstroObject)
+            _tmp_out = make_copy_exclude_items_by_class(in_dict=_tmp_in, excl_class=AstroObject)
             for i, gal in enumerate(self.galaxies):
                 # replace the list of galaxy names by dicts with zero depth galaxy properties
                 #
