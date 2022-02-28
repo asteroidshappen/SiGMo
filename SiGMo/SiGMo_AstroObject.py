@@ -5,6 +5,7 @@
 import copy
 import inspect
 import warnings
+from pathlib import Path
 
 import numpy as np
 
@@ -166,6 +167,49 @@ class AstroObject(ABC):
 
         return _snp
 
+    def make_and_write_all_snapshots(self, index: int, n_steps: int, outdir: Path, single_snapshots: bool = True):
+        """
+        Writes snapshots of the Environment self and of all linked Halos and Galaxies to disk
+        :param index: unique identifier for this whole set of snapshots, e.g. number of the timestep
+        :param n_steps: maximum number of the identifier index
+        :param outdir: output directory for all snapshot files
+        :param single_snapshots: will single Snapshots and output files be made for this very AstroObject and every
+        single AstroObject below it in hierarchy (True), or will one large, all-encompassing multi-Snapshot and file be
+        made for this very AstroObject and its lower-in-hierarchy AstroObjects (False)?
+        :return: None
+        """
+        # if we want to write single snapshot files to disk for every single object
+        if single_snapshots:
+            snp = self.make_snapshot(single_snapshot=True)
+            snp.save_to_disk(outdir / snp.autoname_with_index(index, n_steps))
+            # split depending on whether self is Environment, Halo, or Galaxy
+            # Environment
+            if isinstance(self, Environment):
+                for halo in self.halos:
+                    # write all Halos in the Environment to disk
+                    snp = halo.make_snapshot(single_snapshot=True)
+                    snp.save_to_disk(outdir / snp.autoname_with_index(index, n_steps))
+                    for gal in halo.galaxies:
+                        # write all Galaxies in this Halo to disk
+                        snp = gal.make_snapshot(single_snapshot=True)
+                        snp.save_to_disk(outdir / snp.autoname_with_index(index, n_steps))
+            # Halo
+            elif isinstance(self, Halo):
+                for gal in self.galaxies:
+                    # write all Galaxies in this Halo to disk
+                    snp = gal.make_snapshot(single_snapshot=True)
+                    snp.save_to_disk(outdir / snp.autoname_with_index(index, n_steps))
+            # Galaxy
+            elif isinstance(self, Galaxy):
+                pass  # this snapshot was already done initially, ahead of the differentiation
+            else:
+                raise TypeError(f'Objects of type {type(self)} are not supported by make_and_write_all_snapshots()')
+        # if we want to write one big snapshot file to disk for all the objects together
+        else:
+            snp = self.make_snapshot(single_snapshot=False)
+            snp.save_to_disk(outdir / snp.autoname_with_index(index, n_steps))
+        return
+
     # # Old functioning make_snapshot() method, but super-inefficient because it makes deepcopy of everything everytime
     # def make_snapshot(self) -> 'Snapshot':
     #     """Returns the current values of all major attributes as dict,
@@ -188,7 +232,7 @@ class AstroObject(ABC):
     def __repr__(self) -> str:
         """Return representation of respective AstroObject. Uses self.make_snapshot() to get values, which have
         therefore already been cleansed of any AstroObjects referenced in the attributes (replaced by their 'name')"""
-        snapshot = self.make_snapshot()
+        snapshot = self.make_snapshot(single_snapshot=True)
         r_string = ", ".join("=".join((str(k), repr(v))) for k, v in snapshot.data.items())
 
         return f'{type(self).__name__}({r_string})'
@@ -197,7 +241,7 @@ class AstroObject(ABC):
     def __str__(self) -> str:
         """Return more user-friendly output for AstroObject. Uses self.make_snapshot() to get values, which have
         therefore already been cleansed of any AstroObjects referenced in the attributes (replaced by their 'name')"""
-        snapshot = self.make_snapshot()
+        snapshot = self.make_snapshot(single_snapshot=True)
         s_string = "\n".join(" = ".join(("  " + str(k), str(v))) for k, v in snapshot.data.items())
 
         return f'Instance of {type(self).__name__}() with the following attributes:\n' + s_string
@@ -339,25 +383,26 @@ class Environment(AstroObject):
 
         return self.make_snapshot()
 
-    def write_all_snapshots(self, index, n_steps, outdir):
-        """
-        Writes snapshots of the Environment self and of all linked Halos and Galaxies to disk
-        :param index: unique identifier for this whole set of snapshots, e.g. number of the timestep
-        :param n_steps: maximum number of the identifier index
-        :param outdir: output directory for all snapshot files
-        :return: no return value
-        """
-        snp = self.make_snapshot()
-        snp.save_to_disk(outdir / snp.autoname_with_index(index, n_steps))
-        for halo in self.halos:
-            # write all Halos in the Environment to disk
-            snp = halo.make_snapshot()
-            snp.save_to_disk(outdir / snp.autoname_with_index(index, n_steps))
-            for gal in halo.galaxies:
-                # write all Galaxies in this Halo to disk
-                snp = gal.make_snapshot()
-                snp.save_to_disk(outdir / snp.autoname_with_index(index, n_steps))
-        return
+    # # Old, working method, previously just called write_all_snapshots. Now uses new method inherited from AstroObject
+    # def make_and_write_all_snapshots(self, index, n_steps, outdir):
+    #     """
+    #     Writes snapshots of the Environment self and of all linked Halos and Galaxies to disk
+    #     :param index: unique identifier for this whole set of snapshots, e.g. number of the timestep
+    #     :param n_steps: maximum number of the identifier index
+    #     :param outdir: output directory for all snapshot files
+    #     :return: no return value
+    #     """
+    #     snp = self.make_snapshot()
+    #     snp.save_to_disk(outdir / snp.autoname_with_index(index, n_steps))
+    #     for halo in self.halos:
+    #         # write all Halos in the Environment to disk
+    #         snp = halo.make_snapshot()
+    #         snp.save_to_disk(outdir / snp.autoname_with_index(index, n_steps))
+    #         for gal in halo.galaxies:
+    #             # write all Galaxies in this Halo to disk
+    #             snp = gal.make_snapshot()
+    #             snp.save_to_disk(outdir / snp.autoname_with_index(index, n_steps))
+    #     return
 
 
 # ========================================================

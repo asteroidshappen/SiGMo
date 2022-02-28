@@ -159,7 +159,7 @@ class FTI(Integrator):
 
         # initial snapshots before first evolve even (basically ICs converted to AstroObjects, then right into Snapshot
         # write the Environment and all its Halos and Galaxies to disk
-        env.write_all_snapshots(0, n_steps, outdir)
+        env.make_and_write_all_snapshots(0, n_steps, outdir)
 
         # loop over time
         for t in trange(1, n_steps):
@@ -169,7 +169,7 @@ class FTI(Integrator):
             # only go through snapshot creation if they will be written to disk
             if (wtd > 0) and ((t % wtd == 0) or (t == n_steps)):
                 # write the Environment and all its Halos and Galaxies to disk
-                env.write_all_snapshots(t, n_steps, outdir)
+                env.make_and_write_all_snapshots(t, n_steps, outdir)
 
         return env
 
