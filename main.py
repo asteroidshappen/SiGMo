@@ -2,10 +2,11 @@ import numpy
 
 import SiGMo as sgm
 
+from pathlib import Path
+
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-# from palettable.colorbrewer import sequential as cbs
 
 from astropy import units as u
 from astropy.cosmology import Planck18 as cosmo
@@ -137,6 +138,186 @@ def calc_bincentres_where_not_nan(value_arr, x_mesh, y_mesh):
             bincentres.append([0.5 * (x_lower + x_upper), 0.5 * (y_lower + y_upper)])
 
     return np.array(bincentres)
+
+def plot_initial_conditions(mstar, SFR, mgas, mhalo, mstar_mesh, sfr_mesh, sfr79_medians, n_binned_min, plot_dir):
+    sfr79_range = (-2, 2)
+    cmap = mpl.cm.RdBu
+    norm = mpl.colors.Normalize(vmin=sfr79_range[0], vmax=sfr79_range[1])
+    fig, (ax_obs, ax_cbar, ax_cbar_mhalo, ax_cbar_mgas) = plt.subplots(1, 4,
+                                                                       gridspec_kw={
+                                                                           'width_ratios': (9, 1, 1, 1),
+                                                                           'hspace': 0.05
+                                                                       },
+                                                                       figsize=(15, 9))
+    im_obs = ax_obs.pcolormesh(mstar_mesh, sfr_mesh,
+                               sfr79_medians,
+                               cmap=cmap, norm=norm)
+    fig.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap=cmap),
+                 ax=ax_cbar,
+                 fraction=0.8,
+                 extend='both',
+                 anchor=(0.0, 0.0),
+                 label='log SFR79')
+    # adding the Galaxy Main Sequence on top (Saintonge+2016, Eq. 5)
+    GMS_x = np.linspace(start=np.min(mstar_mesh),
+                        stop=np.max(mstar_mesh),
+                        num=1000,
+                        endpoint=True)
+    ax_obs.plot(GMS_x, GMS_Saintonge2016(GMS_x), color='xkcd:magenta', ls='--')
+    mhalo_color_range = (np.min(np.log10(mhalo)), np.max(np.log10(mhalo)))
+    cmap_mhalo = mpl.cm.RdPu
+    norm_mhalo = mpl.colors.Normalize(vmin=mhalo_color_range[0], vmax=mhalo_color_range[1])
+    ic_sims_mhalo = ax_obs.scatter(x=np.log10(mstar), y=np.log10(SFR) - 9.,
+                                   c=np.log10(mhalo),
+                                   facecolors='none', edgecolors='face',
+                                   cmap=cmap_mhalo, norm=norm_mhalo,
+                                   marker="o", s=1.5 * mpl.rcParams['lines.markersize'] ** 2.,
+                                   zorder=10)
+    fig.colorbar(mpl.cm.ScalarMappable(norm=norm_mhalo, cmap=cmap_mhalo),
+                 ax=ax_cbar_mhalo,
+                 fraction=0.8,
+                 # extend='both',
+                 anchor=(0.0, 0.0),
+                 label=r'log $M_{\mathrm{Halo}}$ [$M_\odot$]')
+    mgas_color_range = (np.min(np.log10(mgas)), np.max(np.log10(mgas)))
+    cmap_mgas = mpl.cm.YlGn
+    norm_mgas = mpl.colors.Normalize(vmin=mgas_color_range[0], vmax=mgas_color_range[1])
+    ic_sims_mgas = ax_obs.scatter(x=np.log10(mstar), y=np.log10(SFR) - 9.,
+                                  c=np.log10(mgas), cmap=cmap_mgas, norm=norm_mgas,
+                                  marker="o", s=1.5 * (mpl.rcParams['lines.markersize'] / 3.) ** 2.,
+                                  zorder=15)
+    fig.colorbar(mpl.cm.ScalarMappable(norm=norm_mgas, cmap=cmap_mgas),
+                 ax=ax_cbar_mgas,
+                 fraction=0.8,
+                 # extend='both',
+                 anchor=(0.0, 0.0),
+                 label=r'log $M_{\mathrm{H}_2}$ [$M_\odot$]')
+    ax_cbar.remove()
+    ax_cbar_mgas.remove()
+    ax_cbar_mhalo.remove()
+    ax_obs.set_xlabel(r'log $M_\star$ [$M_\odot$]')
+    ax_obs.set_ylabel(r'log SFR [$M_\odot \, yr^{-1}$]')
+    ax_obs.text(0.05, 0.95, f"only showing bins with {n_binned_min} or more objects", transform=ax_obs.transAxes)
+    fig.savefig(plot_dir / f'mstar_SFR_obs_vs_ICs_of_sims_{datetime.now().strftime("%Y.%m.%d-%H.%M.%S")}.png')
+    return fig, ax_obs
+
+def explore_attrs_and_augment_plot(env, mstar_mesh, sfr_mesh, fig, ax_obs, plot_dir):
+    # min and max of valid mstar and SFR input
+    mstar_min, mstar_max = np.min(mstar_mesh), np.max(mstar_mesh)
+    sfr_min, sfr_max = np.min(sfr_mesh), np.max(sfr_mesh)
+    # input loop: only exits once valid mstar and SFR values have been entered
+    while True:
+        mstar_in = input("Enter: log mstar [M_sol]")
+        sfr_in = input("Enter: log SFR [M_sol/yr]")
+        try:
+            mstar_in = float(mstar_in)
+            sfr_in = float(sfr_in)
+        except ValueError:
+            print("Either mstar or SFR or both were not valid floating point numbers. Please try again")
+            continue
+        if (mstar_min <= mstar_in <= mstar_max) and (sfr_min <= sfr_in <= sfr_max):
+            break
+        else:
+            print(f"Please enter a valid range of mstar and SFR:\n"
+                  f"{mstar_min} ≤ log mstar ≤ {mstar_max}\n"
+                  f"{sfr_min} ≤ log SFR ≤ {sfr_max}")
+    # find the closest value in log mstar and log SFR space that is actually used in (an) AstroObject(s)
+    mstar_in_nn = min((mstar_mesh[0, :-1] + mstar_mesh[0, 1:]) / 2., key=lambda x: abs(x - mstar_in))
+    sfr_in_nn = min((sfr_mesh[:-1, 0] + sfr_mesh[1:, 0]) / 2., key=lambda x: abs(x - sfr_in))
+    print(f"INPUT:\n log mstar = {mstar_in}\n log SFR = {sfr_in}")
+    print(f"NEAREST MATCH:\n log mstar = {mstar_in_nn}\n log SFR = {sfr_in_nn}")
+    # mark the selected mstar SFR bin in the plot
+    mstar_line = ax_obs.axvline(mstar_in_nn, color="xkcd:dark grey")
+    sfr_line = ax_obs.axhline(sfr_in_nn, color="xkcd:dark grey")
+    fig.show()
+    # find the Galaxy that matches this value pair, and the Halo that contains it
+    # grab all mstar and SFR values (works for ONE galaxy per halo)
+    # (if I wanted to change that: env --> galaxies --> halo should be unique and work for arb. gals per halo)
+    mstar_all = np.log10(np.array([_halo.galaxies[0].mstar for _halo in env.halos]))
+    sfr_all = np.log10(np.array([_halo.galaxies[0].SFR for _halo in env.halos])) - 9.  # convert from Gyr to yr
+    # print(sfr_all)
+    # print(len(mstar_all), len(sfr_all))
+    # find the matches in mstar, then in SFR, then combine
+    mstar_match = np.isclose(mstar_all, mstar_in_nn)
+    sfr_match = np.isclose(sfr_all, sfr_in_nn)
+    mstar_sfr_match = mstar_match & sfr_match
+    # check whether the selcted coordinates actually contain a galaxy and halo
+    try:
+        i_match = int(np.argwhere(mstar_sfr_match))
+    except TypeError:
+        print("The mstar-SFR bin you selected does not contain a Galaxy/Halo.\n"
+              "Please restart and try again")
+    else:
+        halo_match = env.halos[i_match]
+        gal_match = halo_match.galaxies[0]  # (this also only works for one Galaxy per Halo)
+
+        # printing the matched AstroObject attributes
+        print(f"Printing attributes of selected Galaxy and associated Halo\n"
+              f"with log mstar = {mstar_all[mstar_sfr_match]}\n"
+              f"and log SFR = {sfr_all[mstar_sfr_match]}")
+        halo_snap = halo_match.make_snapshot()
+        gal_snap = gal_match.make_snapshot()
+        print("HALO PROPERTIES:")
+        for k, v in halo_snap.data.items():
+            print(f"  {k:<5} = {v}")
+        print("GALAXY PROPERTIES")
+        for k, v in gal_snap.data.items():
+            print(f"  {k:<5} = {v}")
+
+        # extend figure and add one axes at the bottom to display selected Halo's and Galaxy's properties
+        fig.set_size_inches(fig.get_size_inches()[0], fig.get_size_inches()[1] * 3 / 2)
+        fig.subplots_adjust(bottom=0.35)
+        ax_values = fig.add_axes(rect=[0.1, 0.05, 0.8, 0.25])
+        ax_values.set_axis_off()
+
+        # print halo properties to axes
+        ax_values.text(0.05, 0.95, "HALO PROPERTIES:",
+                       weight='bold', fontsize=16,
+                       va='top',
+                       transform=ax_values.transAxes)
+        halo_d = halo_snap.data
+        halo_d = {k: v for k, v in halo_d.items() if isinstance(v, (float, int))}
+        halo_values_str = "\n".join([f"{k:<5} = {v:.3e}" for k, v in halo_d.items()])
+        # halo_values_str = (f"{'mtot':<5} = {halo_d['mtot']:.3e}\n"
+        #                    f"{'mdm':<5} = {halo_d['mdm']:.3e}\n"
+        #                    f"{'mgas':<5} = {halo_d['mgas']:.3e}")
+        ax_values.text(0.05, 0.83, halo_values_str,
+                       fontsize=14, linespacing=1.3,
+                       va='top',
+                       transform=ax_values.transAxes)
+
+        # print galaxy properties to axes
+        ax_values.text(0.35, 0.95, "GALAXY PROPERTIES:",
+                       weight='bold', fontsize=16,
+                       va='top',
+                       transform=ax_values.transAxes)
+        gal_d = gal_snap.data
+        gal_d = {k: v for k, v in gal_d.items() if isinstance(v, (float, int))}
+        gal_d_items = list(gal_d.items())
+        gal_values_str_1 = "\n".join([f"{k:<5} = {v:.3e}" for k, v in gal_d_items[:12]])
+        ax_values.text(0.35, 0.83, gal_values_str_1,
+                       fontsize=14, linespacing=1.3,
+                       va='top',
+                       transform=ax_values.transAxes)
+        gal_values_str_2 = "\n".join([f"{k:<5} = {v:.3e}" for k, v in gal_d_items[12:]])
+        ax_values.text(0.65, 0.83, gal_values_str_2,
+                       fontsize=14, linespacing=1.3,
+                       va='top',
+                       transform=ax_values.transAxes)
+
+        # add figure title and show figure
+        title_str = f"Properties of {halo_snap.data['name']} / {gal_snap.data['name']}"
+        subtitle_str = (r"$\log (M_\mathrm{halo} / \; M_\odot)$ = " + f"{np.log10(halo_snap.data['mtot']):.2f} , "
+                                                                      r"$\log (M_\star / \; M_\odot)$ = " + f"{np.log10(gal_snap.data['mstar']):.2f} , "
+                                                                                                            r"$\log (SFR / \; M_\odot yr^{-1})$ = " + f"{np.log10(gal_snap.data['SFR']) - 9.:.2f}")  # convert /Gyr to /yr
+
+        fig.suptitle(title_str, fontsize=24, va='top')
+        ax_values.text(0.5, 3.6, subtitle_str,
+                       va='top', ha='center', fontsize=18,
+                       transform=ax_values.transAxes)
+        fig.show()
+        fig.savefig(
+            plot_dir / f'mstar_SFR_obs_vs_ICs_of_sims_details_{halo_snap.data["name"]}_{datetime.now().strftime("%Y.%m.%d-%H.%M.%S")}.png')
 
 
 # ================
@@ -3006,7 +3187,6 @@ def main():
     # )
 
     # setting paths
-    from pathlib import Path
     project_dir = Path.cwd()
     sfr79_dir = project_dir / 'data' / "SFR79_grids"
     date_and_time_str = datetime.now().strftime("%Y.%m.%d-%H.%M.%S")
@@ -3097,72 +3277,8 @@ def main():
 
 
     # intermediate plotting: checking that the ICs (mstar and SFR) are actually matching the obs. input
-    sfr79_range = (-2, 2)
-    cmap = mpl.cm.RdBu
-    norm = mpl.colors.Normalize(vmin=sfr79_range[0], vmax=sfr79_range[1])
-    fig, (ax_obs, ax_cbar, ax_cbar_mhalo, ax_cbar_mgas) = plt.subplots(1, 4,
-                                                         gridspec_kw={
-                                                             'width_ratios': (9, 1, 1, 1),
-                                                             'hspace': 0.05
-                                                         },
-                                                         figsize=(15, 9))
-    im_obs = ax_obs.pcolormesh(mstar_mesh, sfr_mesh,
-                               sfr79_medians,
-                               cmap=cmap, norm=norm)
-    fig.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap=cmap),
-                 ax=ax_cbar,
-                 fraction=0.8,
-                 extend='both',
-                 anchor=(0.0, 0.0),
-                 label='log SFR79')
-
-    # adding the Galaxy Main Sequence on top (Saintonge+2016, Eq. 5)
-    GMS_x = np.linspace(start=np.min(mstar_mesh),
-                        stop=np.max(mstar_mesh),
-                        num=1000,
-                        endpoint=True)
-    ax_obs.plot(GMS_x, GMS_Saintonge2016(GMS_x), color='xkcd:magenta', ls='--')
-
-    mhalo_color_range = (np.min(np.log10(mhalo)), np.max(np.log10(mhalo)))
-    cmap_mhalo = mpl.cm.RdPu
-    norm_mhalo = mpl.colors.Normalize(vmin=mhalo_color_range[0], vmax=mhalo_color_range[1])
-    ic_sims_mhalo = ax_obs.scatter(x=np.log10(mstar), y=np.log10(SFR) - 9.,
-                                   c=np.log10(mhalo),
-                                   facecolors='none', edgecolors='face',
-                                   cmap=cmap_mhalo, norm=norm_mhalo,
-                                   marker="o", s=1.5 * mpl.rcParams['lines.markersize'] ** 2.,
-                                   zorder=10)
-    fig.colorbar(mpl.cm.ScalarMappable(norm=norm_mhalo, cmap=cmap_mhalo),
-                 ax=ax_cbar_mhalo,
-                 fraction=0.8,
-                 # extend='both',
-                 anchor=(0.0, 0.0),
-                 label=r'log $M_{\mathrm{Halo}}$ [$M_\odot$]')
-
-    mgas_color_range = (np.min(np.log10(mgas)), np.max(np.log10(mgas)))
-    cmap_mgas = mpl.cm.YlGn
-    norm_mgas = mpl.colors.Normalize(vmin=mgas_color_range[0], vmax=mgas_color_range[1])
-    ic_sims_mgas = ax_obs.scatter(x=np.log10(mstar), y=np.log10(SFR) - 9.,
-                                  c=np.log10(mgas), cmap=cmap_mgas, norm=norm_mgas,
-                                  marker="o", s=1.5 * (mpl.rcParams['lines.markersize']/3.) ** 2.,
-                                  zorder=15)
-    fig.colorbar(mpl.cm.ScalarMappable(norm=norm_mgas, cmap=cmap_mgas),
-                 ax=ax_cbar_mgas,
-                 fraction=0.8,
-                 # extend='both',
-                 anchor=(0.0, 0.0),
-                 label=r'log $M_{\mathrm{H}_2}$ [$M_\odot$]')
-
-
-    ax_cbar.remove()
-    ax_cbar_mgas.remove()
-    ax_cbar_mhalo.remove()
-    ax_obs.set_xlabel(r'log $M_\star$ [$M_\odot$]')
-    ax_obs.set_ylabel(r'log SFR [$M_\odot \, yr^{-1}$]')
-    ax_obs.text(0.05, 0.95, f"only showing bins with {n_binned_min} or more objects", transform=ax_obs.transAxes)
-    fig.savefig(plot_dir / f'mstar_SFR_obs_vs_ICs_of_sims_{datetime.now().strftime("%Y.%m.%d-%H.%M.%S")}.png')
-
-
+    fig, ax_obs = plot_initial_conditions(mstar, SFR, mgas, mhalo, mstar_mesh, sfr_mesh, sfr79_medians, n_binned_min,
+                                          plot_dir)
 
     # numbering Halos and Galaxies
     name_i = np.arange(len(mstar))
@@ -3281,127 +3397,7 @@ def main():
         explore_attrs = input("Do you want to explore the attributes of the AstroObjects that you just created? "
                               "[y/n]").casefold()
         if (explore_attrs == "y".casefold()) or (explore_attrs == "yes".casefold()):
-            # min and max of valid mstar and SFR input
-            mstar_min, mstar_max = np.min(mstar_mesh), np.max(mstar_mesh)
-            sfr_min, sfr_max = np.min(sfr_mesh), np.max(sfr_mesh)
-
-            # input loop: only exits once valid mstar and SFR values have been entered
-            while True:
-                mstar_in = input("Enter: log mstar [M_sol]")
-                sfr_in = input("Enter: log SFR [M_sol/yr]")
-                try:
-                    mstar_in = float(mstar_in)
-                    sfr_in = float(sfr_in)
-                except ValueError:
-                    print("Either mstar or SFR or both were not valid floating point numbers. Please try again")
-                    continue
-                if (mstar_min <= mstar_in <= mstar_max) and (sfr_min <= sfr_in <= sfr_max):
-                    break
-                else:
-                    print(f"Please enter a valid range of mstar and SFR:\n"
-                          f"{mstar_min} ≤ log mstar ≤ {mstar_max}\n"
-                          f"{sfr_min} ≤ log SFR ≤ {sfr_max}")
-
-            # find the closest value in log mstar and log SFR space that is actually used in (an) AstroObject(s)
-            mstar_in_nn = min((mstar_mesh[0, :-1] + mstar_mesh[0, 1:])/2., key=lambda x:abs(x - mstar_in))
-            sfr_in_nn = min((sfr_mesh[:-1, 0] + sfr_mesh[1:, 0])/2., key=lambda x:abs(x - sfr_in))
-            print(f"INPUT:\n log mstar = {mstar_in}\n log SFR = {sfr_in}")
-            print(f"NEAREST MATCH:\n log mstar = {mstar_in_nn}\n log SFR = {sfr_in_nn}")
-
-            # mark the selected mstar SFR bin in the plot
-            mstar_line = ax_obs.axvline(mstar_in_nn, color="xkcd:dark grey")
-            sfr_line = ax_obs.axhline(sfr_in_nn, color="xkcd:dark grey")
-            fig.show()
-
-            # find the Galaxy that matches this value pair, and the Halo that contains it
-            # grab all mstar and SFR values (works for ONE galaxy per halo)
-            # (if I wanted to change that: env --> galaxies --> halo should be unique and work for arb. gals per halo)
-            mstar_all = np.log10(np.array([_halo.galaxies[0].mstar for _halo in env.halos]))
-            sfr_all = np.log10(np.array([_halo.galaxies[0].SFR for _halo in env.halos])) -9.  # convert from Gyr to yr
-            # print(sfr_all)
-            # print(len(mstar_all), len(sfr_all))
-
-            # find the matches in mstar, then in SFR, then combine
-            mstar_match = np.isclose(mstar_all, mstar_in_nn)
-            sfr_match = np.isclose(sfr_all, sfr_in_nn)
-            mstar_sfr_match = mstar_match & sfr_match
-            # check whether the selcted coordinates actually contain a galaxy and halo
-            try:
-                i_match = int(np.argwhere(mstar_sfr_match))
-            except TypeError:
-                print("The mstar-SFR bin you selected does not contain a Galaxy/Halo.\n"
-                      "Please restart and try again")
-            else:
-                halo_match = env.halos[i_match]
-                gal_match = halo_match.galaxies[0]   # (this also only works for one Galaxy per Halo)
-
-                # printing the matched AstroObject attributes
-                print(f"Printing attributes of selected Galaxy and associated Halo\n"
-                      f"with log mstar = {mstar_all[mstar_sfr_match]}\n"
-                      f"and log SFR = {sfr_all[mstar_sfr_match]}")
-                halo_snap = halo_match.make_snapshot()
-                gal_snap = gal_match.make_snapshot()
-                print("HALO PROPERTIES:")
-                for k, v in halo_snap.data.items():
-                    print(f"  {k:<5} = {v}")
-                print("GALAXY PROPERTIES")
-                for k, v in gal_snap.data.items():
-                    print(f"  {k:<5} = {v}")
-
-                # extend figure and add one axes at the bottom to display selected Halo's and Galaxy's properties
-                fig.set_size_inches(fig.get_size_inches()[0], fig.get_size_inches()[1]*3/2)
-                fig.subplots_adjust(bottom=0.35)
-                ax_values = fig.add_axes(rect=[0.1, 0.05, 0.8, 0.25])
-                ax_values.set_axis_off()
-
-                # print halo properties to axes
-                ax_values.text(0.05, 0.95, "HALO PROPERTIES:",
-                               weight='bold', fontsize=16,
-                               va='top',
-                               transform=ax_values.transAxes)
-                halo_d = halo_snap.data
-                halo_d = {k: v for k, v in halo_d.items() if isinstance(v, (float, int))}
-                halo_values_str = "\n".join([f"{k:<5} = {v:.3e}" for k, v in halo_d.items()])
-                # halo_values_str = (f"{'mtot':<5} = {halo_d['mtot']:.3e}\n"
-                #                    f"{'mdm':<5} = {halo_d['mdm']:.3e}\n"
-                #                    f"{'mgas':<5} = {halo_d['mgas']:.3e}")
-                ax_values.text(0.05, 0.83, halo_values_str,
-                               fontsize=14, linespacing=1.3,
-                               va='top',
-                               transform=ax_values.transAxes)
-
-                # print galaxy properties to axes
-                ax_values.text(0.35, 0.95, "GALAXY PROPERTIES:",
-                               weight='bold', fontsize=16,
-                               va='top',
-                               transform=ax_values.transAxes)
-                gal_d = gal_snap.data
-                gal_d = {k: v for k, v in gal_d.items() if isinstance(v, (float, int))}
-                gal_d_items = list(gal_d.items())
-                gal_values_str_1 = "\n".join([f"{k:<5} = {v:.3e}" for k, v in gal_d_items[:12]])
-                ax_values.text(0.35, 0.83, gal_values_str_1,
-                               fontsize=14, linespacing=1.3,
-                               va='top',
-                               transform=ax_values.transAxes)
-                gal_values_str_2 = "\n".join([f"{k:<5} = {v:.3e}" for k, v in gal_d_items[12:]])
-                ax_values.text(0.65, 0.83, gal_values_str_2,
-                               fontsize=14, linespacing=1.3,
-                               va='top',
-                               transform=ax_values.transAxes)
-
-                # add figure title and show figure
-                title_str = f"Properties of {halo_snap.data['name']} / {gal_snap.data['name']}"
-                subtitle_str = (r"$\log (M_\mathrm{halo} / \; M_\odot)$ = " + f"{np.log10(halo_snap.data['mtot']):.2f} , "
-                                r"$\log (M_\star / \; M_\odot)$ = " + f"{np.log10(gal_snap.data['mstar']):.2f} , "
-                                r"$\log (SFR / \; M_\odot yr^{-1})$ = " + f"{np.log10(gal_snap.data['SFR']) - 9.:.2f}")  # convert /Gyr to /yr
-
-                fig.suptitle(title_str, fontsize=24, va='top')
-                ax_values.text(0.5, 3.6, subtitle_str,
-                               va='top', ha='center', fontsize=18,
-                               transform=ax_values.transAxes)
-                fig.show()
-                fig.savefig(plot_dir / f'mstar_SFR_obs_vs_ICs_of_sims_details_{halo_snap.data["name"]}_{datetime.now().strftime("%Y.%m.%d-%H.%M.%S")}.png')
-
+            explore_attrs_and_augment_plot(env, mstar_mesh, sfr_mesh, fig, ax_obs, plot_dir)
 
             # print(mstar_all[mstar_sfr_match])
             # print(sfr_all[mstar_sfr_match])
