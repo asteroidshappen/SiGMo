@@ -3371,7 +3371,8 @@ def main():
         print("Starting integration")
         Integrator.integrate(
             wtd=1,
-            outdir=out_dir / "0_forward_800Myr"
+            outdir=out_dir / "0_forward_800Myr",
+            single_snapshots=False
         )
 
         # create BACKWARD integrator
@@ -3387,7 +3388,8 @@ def main():
         print("Starting integration")
         Integrator.integrate(
             wtd=1,
-            outdir=out_dir / "1_backward_800Myr"
+            outdir=out_dir / "1_backward_800Myr",
+            single_snapshots=False
         )
 
     elif (run_sim == "n".casefold()) or (run_sim == "no".casefold()):
