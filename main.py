@@ -3305,12 +3305,12 @@ def main():
     IC_halo_HLF = sgm.IC.single_param('HLF', HLF)
 
     # Environment IC
-    # IC_env_zstart = sgm.IC.single_param('zstart', [0.])  # can also use 'lookbacktime' (Gyrs) instead of zstart
-    IC_env_lookbacktime = sgm.IC.single_param('lookbacktime', [0.8])  # THIS IS FOR FORWARDS, THEN BACKWARDS COMPARISON
+    IC_env_zstart = sgm.IC.single_param('zstart', [0.])  # can also use 'lookbacktime' (Gyrs) instead of zstart
+    # IC_env_lookbacktime = sgm.IC.single_param('lookbacktime', [0.8])  # THIS IS FOR FORWARDS, THEN BACKWARDS COMPARISON
 
     # combine into one IC object for Environment, one for Halos and one for Galaxies
-    # IC_env_comb = (IC_env_zstart)
-    IC_env_comb = (IC_env_lookbacktime)  # THIS IS FOR FORWARDS, THEN BACKWARDS COMPARISON
+    IC_env_comb = (IC_env_zstart)
+    # IC_env_comb = (IC_env_lookbacktime)  # THIS IS FOR FORWARDS, THEN BACKWARDS COMPARISON
     IC_halo_comb = (IC_halo_mtot +
                     IC_halo_BDR +
                     IC_halo_mdm +
@@ -3339,6 +3339,7 @@ def main():
     run_sim = input("Proceed with running simulation? [y/n]").casefold()
     if (run_sim == "y".casefold()) or (run_sim == "yes".casefold()):
         out_dir.mkdir()  # actually make the output sub-directory (since we're sure we'll be running the sim now)
+        print(f"Created new output directory '{out_dir}'")
 
         # # create integrator
         # Integrator = sgm.FTI(
@@ -3356,23 +3357,47 @@ def main():
         #     outdir=out_dir
         # )
 
-        # THIS IS FOR FORWARDS, THEN BACKWARDS COMPARISON
 
-        # create FORWARD integrator
-        Integrator = sgm.FTI(
-            env=env,
-            evolve_method='evolve',
-            dt=1.e-3,
-            t_start=env.lookbacktime,
-            t_end=0.0
-        )
+        # # THIS IS FOR FORWARDS, THEN BACKWARDS COMPARISON
+        #
+        # # create FORWARD integrator
+        # Integrator = sgm.FTI(
+        #     env=env,
+        #     evolve_method='evolve',
+        #     # dt=1.e-3,
+        #     dt=1.e-4,
+        #     t_start=env.lookbacktime,
+        #     t_end=0.0
+        # )
+        #
+        # # run the FORWARD integrator
+        # print("Starting integration")
+        # Integrator.integrate(
+        #     wtd=1,
+        #     outdir=out_dir / "0_forward_800Myr_1e-4",
+        #     single_snapshots=False
+        # )
+        #
+        # # create BACKWARD integrator
+        # Integrator = sgm.FTI(
+        #     env=env,
+        #     evolve_method='evolve',
+        #     # dt=-1.e-3,
+        #     dt=-1.e-4,
+        #     t_start=env.lookbacktime,
+        #     t_end=0.8
+        # )
+        #
+        # # run the BACKWARD integrator
+        # print("Starting integration")
+        # Integrator.integrate(
+        #     wtd=1,
+        #     outdir=out_dir / "1_backward_800Myr_1e-4",
+        #     single_snapshots=False
+        # )
 
-        # run the FORWARD integrator
-        print("Starting integration")
-        Integrator.integrate(
-            wtd=1,
-            outdir=out_dir / "0_forward_800Myr"
-        )
+
+        # THIS IS JUST BACKWARDS INTEGRATION FROM z=0, BUT FARTHER
 
         # create BACKWARD integrator
         Integrator = sgm.FTI(
@@ -3380,14 +3405,15 @@ def main():
             evolve_method='evolve',
             dt=-1.e-3,
             t_start=env.lookbacktime,
-            t_end=0.8
+            t_end=2
         )
 
         # run the BACKWARD integrator
         print("Starting integration")
         Integrator.integrate(
             wtd=1,
-            outdir=out_dir / "1_backward_800Myr"
+            outdir=out_dir / "0_backward_2Gyr_1e-3",
+            single_snapshots=False
         )
 
     elif (run_sim == "n".casefold()) or (run_sim == "no".casefold()):
