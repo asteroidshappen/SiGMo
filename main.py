@@ -12,8 +12,6 @@ from datetime import timedelta, datetime
 
 # ====================
 # set some global vars
-from SiGMo.SiGMo_misc import GMS_Saintonge2016, iter_mhalo_from_mstar, calculate_mgas_mstar_from_sSFR, \
-    calc_bincentres_where_not_nan
 
 alphabet_str = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
@@ -45,7 +43,7 @@ def plot_initial_conditions(mstar, SFR, mgas, mhalo, mstar_mesh, sfr_mesh, sfr79
                         stop=np.max(mstar_mesh),
                         num=1000,
                         endpoint=True)
-    ax_obs.plot(GMS_x, GMS_Saintonge2016(GMS_x), color='xkcd:magenta', ls='--')
+    ax_obs.plot(GMS_x, sgm.GMS_Saintonge2016(GMS_x), color='xkcd:magenta', ls='--')
     mhalo_color_range = (np.min(np.log10(mhalo)), np.max(np.log10(mhalo)))
     cmap_mhalo = mpl.cm.RdPu
     norm_mhalo = mpl.colors.Normalize(vmin=mhalo_color_range[0], vmax=mhalo_color_range[1])
@@ -248,7 +246,7 @@ def main():
     sfr79_medians = np.where(n_binned >= n_binned_min, sfr79_medians, np.nan)
 
     # getting the mstar-SFR bin cells that do have observational results
-    mstar_and_SFR = calc_bincentres_where_not_nan(sfr79_medians, mstar_mesh, sfr_mesh)
+    mstar_and_SFR = sgm.calc_bincentres_where_not_nan(sfr79_medians, mstar_mesh, sfr_mesh)
 
 
     # xCOLD GASS
@@ -271,7 +269,7 @@ def main():
         mstar = 10**mstar_and_SFR[:, 0]
         SFR = 10**mstar_and_SFR[:, 1] * 10**9   # CONVERSION of 'per yr' (obs) to 'per Gyr' (sims)
         sSFR = SFR / mstar
-        mgas = calculate_mgas_mstar_from_sSFR(sSFR / 10 ** 9, log_values=False, withscatter=False) * mstar
+        mgas = sgm.calculate_mgas_mstar_from_sSFR(sSFR / 10 ** 9, log_values=False, withscatter=False) * mstar
     elif use_as_ICs.casefold() == "xCG".casefold():  # xCG
         mstar = 10**xCG_mstar
         SFR = 10**xCG_SFR * 10**9   # CONVERSION of 'per yr' (obs) to 'per Gyr' (sims)
@@ -293,7 +291,7 @@ def main():
     # MLF = np.array([0.2] * len(mstar))
 
     # initial values for Halo properties
-    mhalo = np.array([iter_mhalo_from_mstar(mstar_i) for mstar_i in mstar])
+    mhalo = np.array([sgm.iter_mhalo_from_mstar(mstar_i) for mstar_i in mstar])
     # BDR = np.array([0.2] * len(mstar))
     BDR = np.array([0.15] * len(mstar))  # actual value from Lilly+13
     HLF = np.array([0.1] * len(mstar))
