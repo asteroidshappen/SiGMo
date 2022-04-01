@@ -3,12 +3,23 @@ import numpy as np
 
 
 def GMS_Saintonge2016(logMstar):
-    '''computes the log10SFR for any given log10Mstar on Galaxy Main Seqence according to Saintonge+2016, Eq.5'''
+    """
+    Computes the log10SFR for any given log10Mstar on Galaxy Main Seqence according to Saintonge+2016, Eq.5
+
+    :param logMstar: log10(stellar mass/solar mass) of a galaxy (in units of solar masses)
+    :return: log10(star-formation rate/solar mass per year) of a galaxy on the star-forming galaxy main sequence, given
+    the input log10(stellar mass/solar mass)
+    """
     return ((-2.332) * logMstar + 0.4156 * logMstar**2 - 0.01828 * logMstar**3)
 
 
 def calc_mstar_from_mhalo(mhalo):
-    """Follows Eq. 2 from Moster+2010"""
+    """
+    Calculate stellar mass according to Eq. 2 from Moster+2010m with constants according to Table 1
+
+    :param mhalo: halo mass in units of solar mass
+    :return: inferred stellar mass of the galaxy in the halo, given the halo mass entered
+    """
     # set constants acc. to Table 1, Moster+2010
     M_1 = 10**11.884
     m_over_M_0 = 0.02820
@@ -29,7 +40,19 @@ def iter_mhalo_from_mstar(
         initial_guess_f: float=1./0.02820,
         verbose=False
 ) -> float:
-    """Iterate to the matching mhalo from known mstar, uses Eq.2 and Table 1 from Moster+2010"""
+    """
+    Iterate to the matching mhalo from known mstar, using the known relation from mstar to mhalo and narrowing in
+    towards the initially entered mstar value. Uses `calc_mstar_from_mhalo` and thus Eq.2 and Table 1 from Moster+2010
+
+    :param mstar: stellar mass of the galaxy in units of solar mass
+    :param precision: relative error of how close to the true value of mstar does the inferred mstar value from the
+    mhalo-to-mstar relation need to be? (default: 1e-3)
+    :param i_max: maximum number of iterations (default: 1e5)
+    :param initial_guess_f: initial guess of factor between mhalo and mstar. The default value is the inverse of the
+    (m/M)_0 value from Table 1 in Moster+2010, which is the leading factor (default: 1./0.02820)
+    :param verbose: will details about results and number of iterations be output to the terminal? (default: False)
+    :return: mhalo: the halo mass inferred from the stellar mass of the galaxy, given the relation from Moster+2010
+    """
     # inital mhalo guess and derived mstar
     mhalo = initial_guess_f*mstar
     mstar_derived = calc_mstar_from_mhalo(mhalo)
@@ -111,6 +134,18 @@ def calculate_mgas_mstar_from_sSFR(sSFR, log_values=False, withscatter=False):
 
 
 def calc_bincentres_where_not_nan(value_arr, x_mesh, y_mesh):
+    """
+    Calculates the bin centres from a 2-d array of values (value_arr) und two 2-d mesh arrays with corresponding bin
+    edges, for all 2-d bins where value_arr is not np.nan. Example: value_arr.shape = (10, 10) , then x_mesh.shape =
+    (11, 11) and y_mesh.shape = (11, 11) , as produced by np.meshgrid().
+
+    :param value_arr: 2-d array with values, e.g. bin counts. Non-relevant bins should be np.nan, so that their bin
+    centres are not calculated here and not included in the return array
+    :param x_mesh: 2-d array as produced by np.meshgrid() based on the bin edges of value_arr in x direction
+    :param y_mesh: 2-d array as produced by np.meshgrid() based on the bin edges of value_arr in y direction
+    :return: 2-d array with shape=(n,2), n being the entries in value_arr that are not np.nan, and the second dimension
+    having the x and y coordinates of the bin centre
+    """
     bincentres = []
     for (value,
          x_lower, x_upper,
