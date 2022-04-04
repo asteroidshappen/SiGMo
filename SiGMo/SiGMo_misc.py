@@ -1,4 +1,6 @@
 # helper methods
+import warnings
+
 import numpy as np
 
 
@@ -11,6 +13,83 @@ def GMS_Saintonge2016(logMstar):
     the input log10(stellar mass/solar mass)
     """
     return ((-2.332) * logMstar + 0.4156 * logMstar**2 - 0.01828 * logMstar**3)
+
+
+def GMS_SFR_Speagle2014(mstar: float, z: float=None, tc: float=None, log=True):
+    """
+    Convenience function (thin wrapper) to use the GMS_sSFR_Speagle2014() function but return SFR instead of sSFR
+
+    Compute the star-formation rate for galaxies on the main sequence, depending on their stellar mass and
+    their redshift. Applicable redshift range: z=0-5. Applicable stellar mass range: log(mstar/M_sol)=9.0-11.8.
+    Adapted from Tacconi+2020, Eq. 1, who in turn adapted it from Speagle+2014, then adapted to return SFR
+
+    :param mstar: stellar mass of the galaxy, in units of solar mass
+    :param z: redshift of the galaxy
+    :param tc: cosmic time at which the galaxy exists
+    :param log: flag to switch between logarithmic in/output (log=True, default), and linear in/output (log=False)
+    :return: star formation rate, in units of  M_sol/Gyr
+    """
+    return GMS_sSFR_Speagle2014(mstar, z, tc, log) * mstar
+
+
+def GMS_sSFR_Speagle2014(mstar: float, z: float=None, tc: float=None, log=True):
+    """
+    Compute the specific star-formation rate for galaxies on the main sequence, depending on their stellar mass and
+    their redshift. Applicable redshift range: z=0-5. Applicable stellar mass range: log(mstar/M_sol)=9.0-11.8.
+    Adapted from Tacconi+2020, Eq. 1, who in turn adapted it from Speagle+2014.
+
+    :param mstar: stellar mass of the galaxy, in units of solar mass
+    :param z: redshift of the galaxy
+    :param tc: cosmic time at which the galaxy exists
+    :param log: flag to switch between logarithmic in/output (log=True, default), and linear in/output (log=False)
+    :return: specific star formation rate, in units of 1/Gyr
+    """
+    # switch between log and lin I/O
+    log_mstar = np.log10(mstar) if not log else mstar
+
+    # check that only exactly one of either z or tc is provided, calculate tc is necessary
+    if z is None and tc is None:
+        raise TypeError('Neither z (redshift) nor tc (cosmic time) were provided.\n'
+                        'sSFR value for the z-dependent GMS not calculated.\n'
+                        'Please provide either and run again')
+    elif z is not None and tc is not None:
+        raise TypeError('Both z (redshift) and tc (cosmic time) were provided.\n'
+                        'sSFR value for the z-dependent GMS not calculated\n'
+                        'Please provide only one and run again')
+    elif z is not None:
+        tc = cosmictime_Speagle2014(z, log=False)  # log=False because the lin version is used in the equations
+    elif tc is not None:
+        pass
+    else:
+        warnings.warn('Input situation of z (redshift) and tc (cosmic time) unclear.\n'
+                      f'From input: z={z!r} , tc={tc!r}\n .'
+                      f'Check inputs to assure calculation is sensible')
+
+    # actual calculation
+    log_sSFR = (-0.16 - 0.026 * tc) * (log_mstar + 0.025) - (6.51 - 0.11 * tc) + 9.
+
+    # take care of the right output if log=True or False
+    sSFR = log_sSFR if log else 10.**log_sSFR
+    return sSFR
+
+
+def cosmictime_Speagle2014(z:float, log=False):
+    """
+    Calculate the cosmic time from the redshift, according to Tacconi+2020, used in the Speagle+2014 GMS calculations.
+    It assumes a flat, ΛCDM (cold dark matter) cosmology with H_0=70 km s^−1 Mpc^−1 and Ω_m=0.3
+
+    :param z: redshift
+    :param log: flag to switch between logarithmic output (log=True), and linear output (log=False, default)
+    :return: cosmic time, in units of Gyr
+    """
+    log_tc = (1.143 -
+              1.026 * np.log10(1 + z) -
+              0.599 * (np.log10(1 + z))**2 +
+              0.528 * (np.log10(1 + z))**3)
+
+    # take care of the right output if log=True or False
+    tc = log_tc if log else 10.**log_tc
+    return tc
 
 
 def calc_mstar_from_mhalo(mhalo):
