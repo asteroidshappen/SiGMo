@@ -235,3 +235,45 @@ def calc_bincentres_where_not_nan(value_arr, x_mesh, y_mesh):
             bincentres.append([0.5 * (x_lower + x_upper), 0.5 * (y_lower + y_upper)])
 
     return np.array(bincentres)
+
+
+def compute_SFR79_from_SFR(gal_a):
+    """
+    Helper function to compute the star-formation change parameter SFR79 directly
+    from the SFR over time data
+
+    :param gal_a: numpy array of SiGMo.Snapshot objects over time. Can have arbitrary
+    shape, as long as the different Snapshots over time for each object are in the
+    last dimension
+    :return: SFR79_a: numpy array with same shape as gal_a except for the last
+    dimension; the time dimension is replaced by three summary values returned
+    in the new last dimension:
+     [0] average SFR over 5 Myr (in units of M_sol);
+     [1] average SFR over 800 Myr (in units of M_sol);
+     [2] log SFR 79 (being log10(avrgSFR_5Myr / avrgSFR_800Myr).
+    Example: if gal_a.shape = (10, 16, 4, 1999), then SFR79.shape = (10, 16, 4, 3)
+    """
+    SFR79_a = np.empty(shape=(*gal_a.shape[:-1], 3), dtype=object)
+    SFR79_a_fl = SFR79_a.reshape(-1, *SFR79_a.shape[-1:])
+    gal_a_fl = gal_a.reshape(-1, *gal_a.shape[-1:])
+    for i, gal_seq in enumerate(tqdm(gal_a_fl)):
+        lookbacktime_a = np.array([gal.data["lookbacktime"] for gal in gal_seq])
+        SFR_a = np.array([gal.data["SFR"] for gal in gal_seq])
+
+        # avrg over 5 Myr
+        SFR7_a = SFR_a[lookbacktime_a <= 0.005]
+        SFR7_avg = np.sum(SFR7_a) / len(SFR7_a)
+        SFR79_a_fl[i, 0] = SFR7_avg
+        # print(SFR79_grid_fl[i, 0])
+
+        # avrg over 800 Myr
+        SFR9_a = SFR_a[lookbacktime_a <= 0.8]
+        SFR9_avg = np.sum(SFR9_a) / len(SFR9_a)
+        SFR79_a_fl[i, 1] = SFR9_avg
+        # print(SFR79_grid_fl[i, 1])
+
+        # log10(SFR_5Myr / SFR_800Myr)
+        SFR79_a_fl[i, 2] = np.log10(SFR7_avg / SFR9_avg)
+        # print(SFR79_grid_fl[i, 2])
+
+    return SFR79_a
