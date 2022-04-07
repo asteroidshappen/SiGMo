@@ -262,19 +262,38 @@ def main():
 
 
     # use data from SDSS or xCG as initial conditions?
-    use_as_ICs = input(f"Specify which obs. data to base the galaxies on: (SDSS/xCG)")
+    use_as_ICs = input(f"Specify which data to base the galaxies on: (SDSS/xCG/GMS)")
 
     # intial values for Galaxy properties
     if use_as_ICs.casefold() == "SDSS".casefold():  # SDSS
         mstar = 10**mstar_and_SFR[:, 0]
         SFR = 10**mstar_and_SFR[:, 1] * 10**9   # CONVERSION of 'per yr' (obs) to 'per Gyr' (sims)
         sSFR = SFR / mstar
-        mgas = sgm.calculate_mgas_mstar_from_sSFR(sSFR / 10 ** 9, log_values=False, withscatter=False) * mstar
+        mgas = sgm.calculate_mgas_mstar_from_sSFR(sSFR / 10**9, log_values=False, withscatter=False) * mstar
     elif use_as_ICs.casefold() == "xCG".casefold():  # xCG
         mstar = 10**xCG_mstar
         SFR = 10**xCG_SFR * 10**9   # CONVERSION of 'per yr' (obs) to 'per Gyr' (sims)
         sSFR = SFR / mstar
         mgas = 10**xCG_mgas
+    elif use_as_ICs.casefold() == "GMS".casefold():  # galaxies on GMS or off GMS, at redshift to be specified
+        # input
+        try:
+            mstar_min = float(input(f"Lowest stellar mass of the galaxies: (log(mstar/M☉), default: 7)")) or 7.
+            mstar_max = float(input(f"Highest stellar mass of the galaxies: (log(mstar/M☉), default: 12)")) or 12.
+            mstar_n = int(input(f"Number of galaxies between "
+                                f"log(mstar/M☉) = {mstar_min} to {mstar_max}: (default: 50)")) or 50
+            z = float(input(f"Redshift of the GMS: (default: 0)")) or 0.
+            SFR_offset = float(input(f"Offset ΔSFR of galaxies from the GMS: (log(ΔSFR/M☉ yr⁻¹), default: 0)")) or 0.
+        except ValueError:
+            print("Some input value(s) could not be converted to numeric value(s)")
+
+        # calc IC values
+        mstar_log = np.linspace(mstar_min, mstar_max, mstar_n)
+        sfr_log = sgm.GMS_SFR_Speagle2014(mstar_log, z=z, log=True)
+        mstar = 10**mstar_log
+        SFR = 10**(sfr_log + SFR_offset) * 10**9   # CONVERSION of 'per yr' (obs) to 'per Gyr' (sims)
+        sSFR = SFR / mstar
+        mgas = sgm.calculate_mgas_mstar_from_sSFR(sSFR / 10**9, log_values=False, withscatter=False) * mstar
     elif isinstance(use_as_ICs, str):
         raise ValueError
     else:
@@ -295,6 +314,9 @@ def main():
     # BDR = np.array([0.2] * len(mstar))
     BDR = np.array([0.15] * len(mstar))  # actual value from Lilly+13
     HLF = np.array([0.1] * len(mstar))
+
+    # initial values of Environment properties
+    z = 0. if z is None else z  # set z = 0. if no other value has been set yet (e.g. through input)
 
 
     # # OLD INTERMEDIATE PLOTTING (worked fine, just SFR79 and mgas)
@@ -372,7 +394,7 @@ def main():
     IC_halo_HLF = sgm.IC.single_param('HLF', HLF)
 
     # Environment IC
-    IC_env_zstart = sgm.IC.single_param('zstart', [0.])  # can also use 'lookbacktime' (Gyrs) instead of zstart
+    IC_env_zstart = sgm.IC.single_param('zstart', [z])  # can also use 'lookbacktime' (Gyrs) instead of zstart
     # IC_env_lookbacktime = sgm.IC.single_param('lookbacktime', [0.8])  # THIS IS FOR FORWARDS, THEN BACKWARDS COMPARISON
 
     # combine into one IC object for Environment, one for Halos and one for Galaxies
@@ -464,16 +486,39 @@ def main():
         # )
 
 
-        # THIS IS JUST BACKWARDS INTEGRATION FROM z=0, BUT FARTHER
+        # # THIS IS JUST BACKWARDS INTEGRATION FROM z=0, BUT FARTHER
+        #
+        # # create BACKWARD integrator
+        # Integrator = sgm.FTI(
+        #     env=env,
+        #     evolve_method='evolve',
+        #     dt=-1.e-3,
+        #     # dt=-1.e-4,
+        #     t_start=env.lookbacktime,
+        #     t_end=2
+        # )
+        #
+        # # run the BACKWARD integrator
+        # print("Starting integration")
+        # Integrator.integrate(
+        #     wtd=1,
+        #     # wtd=10,
+        #     outdir=out_dir / "0_backward_2Gyr_dt1e-3",
+        #     # outdir=out_dir / "0_backward_2Gyr_dt1e-4_wtd10",
+        #     single_snapshots=False
+        # )
+
+
+
+        # THIS IS JUST FORWARDS INTEGRATION FROM z SET EARLIER, RUNNING FOR 1 Gyr
 
         # create BACKWARD integrator
         Integrator = sgm.FTI(
             env=env,
             evolve_method='evolve',
-            dt=-1.e-3,
-            # dt=-1.e-4,
+            dt=-1.e3,
             t_start=env.lookbacktime,
-            t_end=2
+            t_end=env.lookbacktime - 1.
         )
 
         # run the BACKWARD integrator
@@ -481,10 +526,10 @@ def main():
         Integrator.integrate(
             wtd=1,
             # wtd=10,
-            outdir=out_dir / "0_backward_2Gyr_dt1e-3",
-            # outdir=out_dir / "0_backward_2Gyr_dt1e-4_wtd10",
+            outdir=out_dir / f"0_forward_from_z{z}_1Gyr_dt1e-3",
             single_snapshots=False
         )
+
 
     elif (run_sim == "n".casefold()) or (run_sim == "no".casefold()):
         print("Integration not started as per user input")
