@@ -3,6 +3,8 @@ import warnings
 
 import numpy as np
 
+from astropy.table import Table
+
 
 def GMS_Saintonge2016(logMstar):
     """
@@ -110,6 +112,83 @@ def calc_mstar_from_mhalo(mhalo):
     mstar = mstar / ((mhalo/M_1)**(-beta) + (mhalo/M_1)**(gamma))
 
     return mstar
+
+
+def lookup_stellar_to_halo_mass_ratio_parameters_for_z(z:float=0.):
+    """
+    Looks up the parameter values for the Moster+2010 stellar-to-halo mass relation depending on redshift. If not
+    exactly a redshift as specified in Table 6 of Moster+2010, a Warning will be raised. For values not covered
+    exactly by this table, please refer to the interpolation function from Moster+2010, Eqns. 23...26 and Table 7
+
+    :param z: redshift for the relation (default: 0.)
+    :return: parameters log_M_1, m_over_M_0, beta and gamma
+    """
+    # make the table with values from the Moster+2010 paper
+    param_table = Table()
+    param_table['z'] = [0.0, 0.5, 0.7, 0.9, 1.1, 1.5, 1.8, 2.5, 3.5]
+    param_table['log_M_1'] = [11.88, 11.95, 11.93, 11.98, 12.05, 12.15, 12.28, 12.22, 12.21]
+    param_table['m_over_M_0'] = [0.0282, 0.0254, 0.0215, 0.0142, 0.0175, 0.0110, 0.0116, 0.0130, 0.0101]
+    param_table['beta'] = [1.057, 1.37, 1.18, 0.91, 1.66, 1.29, 1.53, 0.90, 0.82]
+    param_table['gamma'] = [0.556, 0.55, 0.48, 0.43, 0.52, 0.41, 0.41, 0.30, 0.46]
+
+    param_selected = param_table[param_table['z'] == z]
+    if len(param_selected) == 0:
+        warnings.warn("Warning: the entered redshift (z) does not correspond to an entry in Table 6 in Moster+2010!\n"
+                      "No parameters will be returned!")
+        param_table['z'] = [None]
+        param_table['log_M_1'] = [None]
+        param_table['m_over_M_0'] = [None]
+        param_table['beta'] = [None]
+        param_table['gamma'] = [None]
+
+    param_selected.remove_column('z')
+    return param_selected[0]
+
+
+def interpolate_stellar_to_halo_mass_ratio_parameters_for_z(z:float=0.):
+    """
+    Interpolate the parameters for the Moster+2010 stellar-to-halo mass relation according to Eqns. 23...26 and Table 7
+
+    :param z: redshift (default: 0.)
+    :return: parameters log_M_1, m_over_M_0, beta and gamma
+    """
+
+    # set mu and nu
+    mu = 0.019
+    nu = -0.72
+    gamma1 = -0.26
+    beta1 = 0.17
+
+    log_M_1_z0, m_over_M_0_z0, beta_z0, gamma_z0 = lookup_stellar_to_halo_mass_ratio_parameters_for_z(z=0.)
+    log_M_1 = log_M_1_z0 * (z + 1)**mu
+    m_over_M_0 = m_over_M_0_z0 * (z + 1)**nu
+    beta = beta_z0 + beta1 * z
+    gamma = gamma_z0 * (z + 1)**gamma1
+
+    return log_M_1, m_over_M_0, beta, gamma
+
+
+def return_stellar_to_halo_mass_ratio_parameters_for_z(z: float=0., try_lookup=True, interpolate=True):
+    """
+    Returns the parameters for the Moster+2010 stellar-to-halo mass relation from different methods
+
+    :param z: redshift (default: 0.)
+    :param try_lookup: try to use observational values from Table 6 in Moster+2010 first? (default: True)
+    :param interpolate: interpolate either for values not in table or always, depending on try_lookup? (default: True)
+    :return: parameters log_M_1, m_over_M_0, beta and gamma
+    """
+    if try_lookup:  # try obs. fitted values first
+        params = lookup_stellar_to_halo_mass_ratio_parameters_for_z(z)
+        if params[0] is None:  # if z is not in the table
+            if interpolate:  # interpolate in that case
+                params = interpolate_stellar_to_halo_mass_ratio_parameters_for_z(z)
+            else:  # only want to use table values
+                raise ValueError(f"Redshift z={z} is not in Table 6 of Moster+2010, and interpolate is set to False.\n"
+                                 f"Use appropriate redshift or enable interpolation as per Moster+2010")
+    else:  # only use fit ("interpolate")
+        params = interpolate_stellar_to_halo_mass_ratio_parameters_for_z(z)
+
+    return params
 
 
 def iter_mhalo_from_mstar(
