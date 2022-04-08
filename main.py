@@ -270,20 +270,22 @@ def main():
         SFR = 10**mstar_and_SFR[:, 1] * 10**9   # CONVERSION of 'per yr' (obs) to 'per Gyr' (sims)
         sSFR = SFR / mstar
         mgas = sgm.calculate_mgas_mstar_from_sSFR(sSFR / 10**9, log_values=False, withscatter=False) * mstar
+        z = 0.
     elif use_as_ICs.casefold() == "xCG".casefold():  # xCG
         mstar = 10**xCG_mstar
         SFR = 10**xCG_SFR * 10**9   # CONVERSION of 'per yr' (obs) to 'per Gyr' (sims)
         sSFR = SFR / mstar
         mgas = 10**xCG_mgas
+        z = 0.
     elif use_as_ICs.casefold() == "GMS".casefold():  # galaxies on GMS or off GMS, at redshift to be specified
         # input
         try:
-            mstar_min = float(input(f"Lowest stellar mass of the galaxies: (log(mstar/M☉), default: 7)")) or 7.
-            mstar_max = float(input(f"Highest stellar mass of the galaxies: (log(mstar/M☉), default: 12)")) or 12.
+            mstar_min = float(input(f"Lowest stellar mass of the galaxies: (log(mstar/M☉), default: 7)") or 7.)
+            mstar_max = float(input(f"Highest stellar mass of the galaxies: (log(mstar/M☉), default: 12)") or 12.)
             mstar_n = int(input(f"Number of galaxies between "
-                                f"log(mstar/M☉) = {mstar_min} to {mstar_max}: (default: 50)")) or 50
-            z = float(input(f"Redshift of the GMS: (default: 0)")) or 0.
-            SFR_offset = float(input(f"Offset ΔSFR of galaxies from the GMS: (log(ΔSFR/M☉ yr⁻¹), default: 0)")) or 0.
+                                f"log(mstar/M☉) = {mstar_min} to {mstar_max}: (default: 50)") or 50)
+            z = float(input(f"Redshift of the GMS: (default: 0)") or 0.)
+            SFR_offset = float(input(f"Offset ΔSFR of galaxies from the GMS: (log(ΔSFR/M☉ yr⁻¹), default: 0)") or 0.)
         except ValueError:
             print("Some input value(s) could not be converted to numeric value(s)")
 
@@ -315,8 +317,8 @@ def main():
     BDR = np.array([0.15] * len(mstar))  # actual value from Lilly+13
     HLF = np.array([0.1] * len(mstar))
 
-    # initial values of Environment properties
-    z = 0. if z is None else z  # set z = 0. if no other value has been set yet (e.g. through input)
+    # # initial values of Environment properties
+    # z = 0. if z is None else z  # set z = 0. if no other value has been set yet (e.g. through input)
 
 
     # # OLD INTERMEDIATE PLOTTING (worked fine, just SFR79 and mgas)
@@ -516,7 +518,7 @@ def main():
         Integrator = sgm.FTI(
             env=env,
             evolve_method='evolve',
-            dt=-1.e3,
+            dt=1.e3,
             t_start=env.lookbacktime,
             t_end=env.lookbacktime - 1.
         )
