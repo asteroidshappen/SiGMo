@@ -256,7 +256,10 @@ def iter_mhalo_from_mstar(
         precision: float=1e-3,
         i_max: int=1e5,
         initial_guess_f: float=1./0.02820,
-        verbose=False
+        verbose=False,
+        z: float=0.,
+        try_lookup=True,
+        interpolate=True
 ) -> float:
     """
     Iterate to the matching mhalo from known mstar, using the known relation from mstar to mhalo and narrowing in
@@ -273,7 +276,7 @@ def iter_mhalo_from_mstar(
     """
     # inital mhalo guess and derived mstar
     mhalo = initial_guess_f*mstar
-    mstar_derived = calc_mstar_from_mhalo(mhalo)
+    mstar_derived = calc_mstar_from_mhalo(mhalo, z=z, try_lookup=try_lookup, interpolate=interpolate)
     ratio = mstar_derived/ mstar
     deviation = ratio - 1
 
@@ -291,7 +294,7 @@ def iter_mhalo_from_mstar(
         mhalo = mhalo - shrink_f * (mhalo * deviation)
 
         # derive new mstar_derived and calc. ratio and deviation
-        mstar_derived = calc_mstar_from_mhalo(mhalo)
+        mstar_derived = calc_mstar_from_mhalo(mhalo, z=z, try_lookup=try_lookup, interpolate=interpolate)
         ratio = mstar_derived/ mstar
         deviation = ratio - 1
 
