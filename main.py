@@ -288,6 +288,7 @@ def main():
             SFR_offset = float(input(f"Offset ΔSFR of galaxies from the GMS: (log(ΔSFR/M☉ yr⁻¹), default: 0)") or 0.)
         except ValueError:
             print("Some input value(s) could not be converted to numeric value(s)")
+            mstar_min, mstar_max, mstar_n, z, SFR_offset = tuple([None] * 5)  # will crash the code in the next lines
 
         # calc IC values
         mstar_log = np.linspace(mstar_min, mstar_max, mstar_n)
