@@ -43,7 +43,10 @@ def plot_initial_conditions(mstar, SFR, mgas, mhalo, mstar_mesh, sfr_mesh, sfr79
                         stop=np.max(mstar_mesh),
                         num=1000,
                         endpoint=True)
-    ax_obs.plot(GMS_x, sgm.GMS_Saintonge2016(GMS_x), color='xkcd:magenta', ls='--')
+    ax_obs.plot(GMS_x, sgm.GMS_Saintonge2016(GMS_x),
+                color='xkcd:purplish pink', ls=':', label="Saintonge et al. 2016")
+    ax_obs.plot(GMS_x, sgm.GMS_Saintonge2022(GMS_x),
+                color='xkcd:magenta', ls='--', label="Saintonge & Catinella 2022")
     mhalo_color_range = (np.min(np.log10(mhalo)), np.max(np.log10(mhalo)))
     cmap_mhalo = mpl.cm.RdPu
     norm_mhalo = mpl.colors.Normalize(vmin=mhalo_color_range[0], vmax=mhalo_color_range[1])
@@ -78,6 +81,7 @@ def plot_initial_conditions(mstar, SFR, mgas, mhalo, mstar_mesh, sfr_mesh, sfr79
     ax_obs.set_xlabel(r'log $M_\star$ [$M_\odot$]')
     ax_obs.set_ylabel(r'log SFR [$M_\odot \, yr^{-1}$]')
     ax_obs.text(0.05, 0.95, f"only showing bins with {n_binned_min} or more objects", transform=ax_obs.transAxes)
+    ax_obs.legend(title=" Galaxy Main Sequence at 0.01 < z < 0.05:  ", loc='lower right')
     fig.savefig(plot_dir / f'mstar_SFR_obs_vs_ICs_of_sims_{datetime.now().strftime("%Y.%m.%d-%H.%M.%S")}.png')
     return fig, ax_obs
 
@@ -292,7 +296,7 @@ def main():
 
         # calc IC values
         mstar_log = np.linspace(mstar_min, mstar_max, mstar_n)
-        sfr_log = sgm.GMS_SFR_Speagle2014(mstar_log, z=z, log=True)
+        sfr_log = sgm.GMS_Leslie2020(mstar_log, z=z, log=True)
         mstar = 10**mstar_log
         SFR = 10**(sfr_log + SFR_offset) * 10**9   # CONVERSION of 'per yr' (obs) to 'per Gyr' (sims)
         sSFR = SFR / mstar
@@ -519,7 +523,7 @@ def main():
         Integrator = sgm.FTI(
             env=env,
             evolve_method='evolve',
-            dt=1.e3,
+            dt=1.e-3,
             t_start=env.lookbacktime,
             t_end=env.lookbacktime - 1.
         )
@@ -529,7 +533,7 @@ def main():
         Integrator.integrate(
             wtd=1,
             # wtd=10,
-            outdir=out_dir / f"0_forward_from_z{z}_1Gyr_dt1e-3",
+            outdir=out_dir / f"0_forward_from_z{z}_1Gyr_dt1e-3_SFRoffset{SFR_offset}",
             single_snapshots=False
         )
 
