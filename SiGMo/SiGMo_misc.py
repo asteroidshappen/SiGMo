@@ -34,7 +34,7 @@ def GMS_Saintonge2022(mstar, log=True):
     return log_SFR if log else 10**log_SFR
 
 
-def GMS_Leslie2020(mstar: float, z=0., log=True):
+def GMS_Leslie2020(mstar, z=0., log=True):
     """
     Computes the SFR on the Galaxy Main Sequence for star-forming galaxies, according to Leslie+2020, dependent on
     stellar mass and redshift, according to Eq. 6 and Table 1 (SF)
@@ -88,7 +88,7 @@ def GMS_SFR_Speagle2014(mstar, z: float=None, tc: float=None, log=True):
     return SFR
 
 
-def GMS_sSFR_Speagle2014(mstar: float, z: float=None, tc: float=None, log=True):
+def GMS_sSFR_Speagle2014(mstar, z: float=None, tc: float=None, log=True):
     """
     Compute the specific star-formation rate for galaxies on the main sequence, depending on their stellar mass and
     their redshift. Applicable redshift range: z=0-5. Applicable stellar mass range: log(mstar/M_sol)=9.0-11.8.
