@@ -67,7 +67,7 @@ def GMS_Leslie2020(mstar: float, z=0., log=True):
 
 # Galaxy Main Sequence WITHOUT flattening
 
-def GMS_SFR_Speagle2014(mstar: float, z: float=None, tc: float=None, log=True):
+def GMS_SFR_Speagle2014(mstar, z: float=None, tc: float=None, log=True):
     """
     Convenience function (thin wrapper) to use the GMS_sSFR_Speagle2014() function but return SFR instead of sSFR
 
