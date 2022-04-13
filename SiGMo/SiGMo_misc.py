@@ -1,10 +1,13 @@
 # helper methods
-import warnings
-
 import numpy as np
-
 from astropy.table import Table
+from astropy.cosmology import Planck18 as cosmo
 
+import warnings
+import tqdm
+
+
+# Galaxy Main Sequence WITH flattening
 
 def GMS_Saintonge2016(logMstar):
     """
@@ -16,6 +19,53 @@ def GMS_Saintonge2016(logMstar):
     """
     return ((-2.332) * logMstar + 0.4156 * logMstar**2 - 0.01828 * logMstar**3)
 
+
+def GMS_Saintonge2022(mstar, log=True):
+    """
+    Computes the SFR on the Galaxy Main Sequence at z~0 according to Saintonge+Catinella2022, Eq. 7
+
+    :param mstar: stellar mass of the galaxy in units of solar mass, either in linear values (when log=False) or in
+        logarithmic values (when log=True; default)
+    :param log: determines whether I/O is in lin values (log=False) in log values (default: log=True)
+    :return: SFR on the GMS associated with the mstar entered, in either linear or logarithmic values dependent on log
+    """
+    lin_mstar = 10**mstar if log else mstar
+    log_SFR = 0.412 - np.log10(1. + (lin_mstar / (10**10.59))**(-0.718))
+    return log_SFR if log else 10**log_SFR
+
+
+def GMS_Leslie2020(mstar: float, z=0., log=True):
+    """
+    Computes the SFR on the Galaxy Main Sequence for star-forming galaxies, according to Leslie+2020, dependent on
+    stellar mass and redshift, according to Eq. 6 and Table 1 (SF)
+
+    :param mstar: tellar mass of the galaxy in units of solar mass, either in linear values (when log=False) or in
+        logarithmic values (when log=True; default)
+    :param z: redshift of the galaxy
+    :param log: determines whether I/O is in lin values (log=False) in log values (default: log=True)
+    :return: Star Formation Rate (SFR) in units of solar mass per year on the GMS, either in lin or log values dependent
+        on whether log=False or log=True (default)
+    """
+
+    # set fixed params
+    S0 = 2.97
+    M0 = 11.06
+    a1 = 0.22
+    a2 = 0.12
+
+    # set input-based params
+    t = cosmo.age(z).value
+    M = mstar if log else np.log10(mstar)
+
+    # calculation
+    Mt = M0 - (a2 * t)
+    log_SFR = S0 - (a1 * t) - np.log10(1. + (10**Mt / 10**M))
+
+    # take care to return either lin or log according to log
+    return log_SFR if log else 10**log_SFR
+
+
+# Galaxy Main Sequence WITHOUT flattening
 
 def GMS_SFR_Speagle2014(mstar: float, z: float=None, tc: float=None, log=True):
     """
@@ -29,9 +79,13 @@ def GMS_SFR_Speagle2014(mstar: float, z: float=None, tc: float=None, log=True):
     :param z: redshift of the galaxy
     :param tc: cosmic time at which the galaxy exists
     :param log: flag to switch between logarithmic in/output (log=True, default), and linear in/output (log=False)
-    :return: star formation rate, in units of  M_sol/Gyr
+    :return: star formation rate, in units of  M_sol/yr
     """
-    return GMS_sSFR_Speagle2014(mstar, z, tc, log) * mstar
+    if log:  # multiplication in lin space translates to addition in log space
+        SFR = GMS_sSFR_Speagle2014(mstar, z, tc, log) + mstar
+    else:
+        SFR = GMS_sSFR_Speagle2014(mstar, z, tc, log) * mstar
+    return SFR
 
 
 def GMS_sSFR_Speagle2014(mstar: float, z: float=None, tc: float=None, log=True):
@@ -68,7 +122,8 @@ def GMS_sSFR_Speagle2014(mstar: float, z: float=None, tc: float=None, log=True):
                       f'Check inputs to assure calculation is sensible')
 
     # actual calculation
-    log_sSFR = (-0.16 - 0.026 * tc) * (log_mstar + 0.025) - (6.51 - 0.11 * tc) + 9.
+    log_sSFR = (-0.16 - 0.026 * tc) * (log_mstar + 0.025) - (6.51 - 0.11 * tc)  # without the original +9 (/Gyr --> /yr)
+    # log_sSFR = (-0.16 - 0.026 * tc) * (log_mstar + 0.025) - (6.51 - 0.11 * tc) + 9.
 
     # take care of the right output if log=True or False
     sSFR = log_sSFR if log else 10.**log_sSFR
@@ -94,18 +149,23 @@ def cosmictime_Speagle2014(z:float, log=False):
     return tc
 
 
-def calc_mstar_from_mhalo(mhalo):
+# Stellar to Halo Mass Relation
+
+def calc_mstar_from_mhalo(mhalo, z: float=0., try_lookup=True, interpolate=True):
     """
-    Calculate stellar mass according to Eq. 2 from Moster+2010m with constants according to Table 1
+    Calculate stellar mass according to Moster+2010, with different methods/constants available
 
     :param mhalo: halo mass in units of solar mass
+    :param z: redshift (default: 0.)
+    :param try_lookup: try to use observational values from Table 6 in Moster+2010 first? (default: True)
+    :param interpolate: interpolate either for values not in table or always, depending on try_lookup? (default: True)
     :return: inferred stellar mass of the galaxy in the halo, given the halo mass entered
     """
     # set constants acc. to Table 1, Moster+2010
-    M_1 = 10**11.884
-    m_over_M_0 = 0.02820
-    beta = 1.057
-    gamma = 0.556
+    log_M_1, m_over_M_0, beta, gamma = return_stellar_to_halo_mass_ratio_parameters_for_z(z=z,
+                                                                                          try_lookup=try_lookup,
+                                                                                          interpolate=interpolate)
+    M_1 = 10**log_M_1
 
     # calc
     mstar = mhalo * 2 * m_over_M_0
@@ -257,6 +317,8 @@ def iter_mhalo_from_mstar(
     return mhalo
 
 
+# Gas Mass to Stellar Mass Relation
+
 def calculate_mgas_mstar_from_sSFR(sSFR, log_values=False, withscatter=False):
     """
     Calculates the M_H2 / M_star ratio from the relation to SSFR according to Saintonge & Catinella 2021 (review), Eq. 5
@@ -291,6 +353,8 @@ def calculate_mgas_mstar_from_sSFR(sSFR, log_values=False, withscatter=False):
     return res
 
 
+# Useful Helper Methods
+
 def calc_bincentres_where_not_nan(value_arr, x_mesh, y_mesh):
     """
     Calculates the bin centres from a 2-d array of values (value_arr) und two 2-d mesh arrays with corresponding bin
@@ -315,6 +379,8 @@ def calc_bincentres_where_not_nan(value_arr, x_mesh, y_mesh):
 
     return np.array(bincentres)
 
+
+# SFR79 Star Formation Rate Change Parameter
 
 def compute_SFR79_from_SFR(gal_a):
     """
