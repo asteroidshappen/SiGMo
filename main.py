@@ -517,7 +517,29 @@ def main():
 
 
 
-        # THIS IS JUST FORWARDS INTEGRATION FROM z SET EARLIER, RUNNING FOR 1 Gyr
+        # # THIS IS JUST FORWARDS INTEGRATION FROM z SET EARLIER, RUNNING FOR 1 Gyr
+        #
+        # # create BACKWARD integrator
+        # Integrator = sgm.FTI(
+        #     env=env,
+        #     evolve_method='evolve',
+        #     dt=1.e-3,
+        #     t_start=env.lookbacktime,
+        #     t_end=env.lookbacktime - 1.
+        # )
+        #
+        # # run the BACKWARD integrator
+        # print("Starting integration")
+        # Integrator.integrate(
+        #     wtd=1,
+        #     # wtd=10,
+        #     outdir=out_dir / f"0_forward_from_z{z}_1Gyr_dt1e-3_SFRoffset{SFR_offset}",
+        #     single_snapshots=False
+        # )
+
+
+
+        # THIS IS FORWARDS INTEGRATION FROM z SET EARLIER, RUNNING UNTIL z=0
 
         # create BACKWARD integrator
         Integrator = sgm.FTI(
@@ -525,7 +547,7 @@ def main():
             evolve_method='evolve',
             dt=1.e-3,
             t_start=env.lookbacktime,
-            t_end=env.lookbacktime - 1.
+            t_end=0.
         )
 
         # run the BACKWARD integrator
@@ -533,7 +555,7 @@ def main():
         Integrator.integrate(
             wtd=1,
             # wtd=10,
-            outdir=out_dir / f"0_forward_from_z{z}_1Gyr_dt1e-3_SFRoffset{SFR_offset}",
+            outdir=out_dir / f"0_forward_from_z{z}_to_z0_dt1e-3_SFRoffset{SFR_offset}",
             single_snapshots=False
         )
 
