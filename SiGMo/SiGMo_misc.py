@@ -39,7 +39,7 @@ def GMS_Leslie2020(mstar, z=0., log=True):
     Computes the SFR on the Galaxy Main Sequence for star-forming galaxies, according to Leslie+2020, dependent on
     stellar mass and redshift, according to Eq. 6 and Table 1 (SF)
 
-    :param mstar: tellar mass of the galaxy in units of solar mass, either in linear values (when log=False) or in
+    :param mstar: stellar mass of the galaxy in units of solar mass, either in linear values (when log=False) or in
         logarithmic values (when log=True; default)
     :param z: redshift of the galaxy
     :param log: determines whether I/O is in lin values (log=False) in log values (default: log=True)
