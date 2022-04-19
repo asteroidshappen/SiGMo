@@ -1,7 +1,7 @@
 # general
 import numpy as np
 import warnings
-import tqdm
+from tqdm import tqdm
 
 # I/O
 import json
