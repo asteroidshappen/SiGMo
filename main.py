@@ -317,7 +317,7 @@ def main():
     # MLF = np.array([0.2] * len(mstar))
 
     # initial values for Halo properties
-    mhalo = np.array([sgm.iter_mhalo_from_mstar(mstar_i) for mstar_i in mstar])
+    mhalo = np.array([sgm.iter_mhalo_from_mstar(mstar_i, z=z, try_lookup=False, interpolate=True) for mstar_i in mstar])
     # BDR = np.array([0.2] * len(mstar))
     BDR = np.array([0.15] * len(mstar))  # actual value from Lilly+13
     HLF = np.array([0.1] * len(mstar))
