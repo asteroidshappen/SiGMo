@@ -308,10 +308,9 @@ def main():
 
     # SFE = np.array([1.] * len(mstar))
     SFE = SFR / mgas   # set SFE to one (a.t.m. const) unique value, in harmony with the sSFR relation (through mgas)
-    # fgal = np.array([0.1] * len(mstar))
-    # fgal = np.array([0.01] * len(mstar))
-    # fgal = np.array([0.005] * len(mstar))
-    fgal = np.array([0.4] * len(mstar))  # following Lilly+13
+    # fgal = np.array([0.4] * len(mstar))  # following Lilly+13
+    # fgal = np.array([0.3] * len(mstar))  # slightly lower accretion than Lilly+13
+    fgal = np.array([0.5] * len(mstar))  # slightly higher accretion than Lilly+13
     MLF = np.array([0.1] * len(mstar))
     # MLF = np.array([0.05] * len(mstar))
     # MLF = np.array([0.2] * len(mstar))
