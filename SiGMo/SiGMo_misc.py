@@ -383,6 +383,20 @@ def calc_bincentres_where_not_nan(value_arr, x_mesh, y_mesh):
     return np.array(bincentres)
 
 
+def find_nearest_index(arr, val):
+    """
+    Determines which index in arr (array) contains the value closest to val (value). If arr contains several elements of
+    the same value who all would fulfil that condition equally, the first element in order of traversion is returned.
+
+    :param arr: an array in which to search for the nearest match
+    :param val: the value for which the closest match is searched
+    :return: index in arr pointing to the (first) closest element to val
+    """
+    arr = np.asarray(arr)
+    nearest_i = (np.abs(arr - val)).argmin()
+    return nearest_i
+
+
 # SFR79 Star Formation Rate Change Parameter
 
 def compute_SFR79_from_SFR(gal_a):
