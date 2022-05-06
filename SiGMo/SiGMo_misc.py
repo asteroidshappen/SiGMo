@@ -413,7 +413,7 @@ def calculate_mgas_mstar_from_sSFR_Tacconi2020(sSFR, mstar, z, log=True, withsca
     # calculate for each entry
     log_res = []
     for _sSFR, _mstar in zip(sSFR, mstar):
-        # calculate Speagle+14 MS sSFR
+        # calculate Spseagle+14 MS sSFR
         sSFR_MS = GMS_sSFR_Speagle2014(mstar=_mstar, z=z, log=log)
 
         # compute individ. terms (depending on whether values are handled linearly of logarithmically)

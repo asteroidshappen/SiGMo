@@ -10,7 +10,7 @@ import os
 # date and time
 from datetime import datetime
 
-# import some helper methods
+# import
 import SiGMo as sgm
 
 
