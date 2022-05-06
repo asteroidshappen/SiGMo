@@ -7,136 +7,17 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import pandas as pd
 
-from astropy import units as u
-from astropy.cosmology import Planck18 as cosmo
-from astropy.cosmology import z_at_value
-
-from tqdm import tqdm, trange
 from timeit import default_timer as timer
 from datetime import timedelta, datetime
 
 # ====================
 # set some global vars
+
 alphabet_str = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
 
 # =====================
 # some helper functions
-def GMS_Saintonge2016(logMstar):
-    '''computes the log10SFR for any given log10Mstar on Galaxy Main Seqence according to Saintonge+2016, Eq.5'''
-    return ((-2.332) * logMstar + 0.4156 * logMstar**2 - 0.01828 * logMstar**3)
-
-def calc_mstar_from_mhalo(mhalo):
-    """Follows Eq. 2 from Moster+2010"""
-    # set constants acc. to Table 1, Moster+2010
-    M_1 = 10**11.884
-    m_over_M_0 = 0.02820
-    beta = 1.057
-    gamma = 0.556
-
-    # calc
-    mstar = mhalo * 2 * m_over_M_0
-    mstar = mstar / ((mhalo/M_1)**(-beta) + (mhalo/M_1)**(gamma))
-
-    return mstar
-
-def iter_mhalo_from_mstar(
-        mstar: float,
-        precision: float=1e-3,
-        i_max: int=1e5,
-        initial_guess_f: float=1./0.02820,
-        verbose=False
-) -> float:
-    """Iterate to the matching mhalo from known mstar, uses Eq.2 and Table 1 from Moster+2010"""
-    # inital mhalo guess and derived mstar
-    mhalo = initial_guess_f*mstar
-    mstar_derived = calc_mstar_from_mhalo(mhalo)
-    ratio = mstar_derived/ mstar
-    deviation = ratio - 1
-
-    # define intial shrink factor
-    shrink_f = 0.9
-
-    # loop towards relation
-    i = 0
-    while abs(deviation) > precision:
-        # back-up prev values
-        mhalo_prev = mhalo
-        deviation_prev = deviation
-
-        # adjust mhalo
-        mhalo = mhalo - shrink_f * (mhalo * deviation)
-
-        # derive new mstar_derived and calc. ratio and deviation
-        mstar_derived = calc_mstar_from_mhalo(mhalo)
-        ratio = mstar_derived/ mstar
-        deviation = ratio - 1
-
-        if type(deviation) == complex or abs(deviation) > abs(deviation_prev):
-            # if type(deviation) == complex or deviation > deviation_prev:
-            shrink_f *= 0.5
-            mhalo = mhalo_prev
-            deviation = deviation_prev
-
-        # increase i
-        i += 1
-
-        # emergency exit condition
-        if i >= i_max:
-            print(f"WARNING: did NOT converge after {i} iterations! ", "\n",
-                  f"Preliminary mhalo = {mhalo:.3e} from mstar = {mstar:.3e}.", "\n",
-                  f"Remaining deviation = {deviation:.3e}, did not reach precision = {precision:.3e}")
-            break
-
-    if verbose:
-        print(f"Computed mhalo = {mhalo:.3e} from mstar = {mstar:.3e}\n"
-              f"Precision = {precision:.3e}, iterations = {i}")
-    return mhalo
-
-def calculate_mgas_mstar_from_sSFR(sSFR, log_values=False, withscatter=False):
-    """
-    Calculates the M_H2 / M_star ratio from the relation to SSFR according to Saintonge & Catinella 2021 (review), Eq. 5
-    Input values can be either in log or lin, and scatter can be included in the output as well.
-
-    :param sSFR: Specific star formation rate in solar masses per year, and in log(M_sol/yr) if log_values = True
-    :param log_values: Whether the input and output values are in log space or not (default: False)
-    :param withscatter: Whether the intrins. and obs. scatter are computed and included in the output (Default: False)
-    :return: The ratio of M_H2 (molecular gas mass) and M_star (stellar mass) in solar masses per year, and in
-    log(M_sol/yr) if log_values = True
-    """
-    sSFR = np.array(sSFR)
-    if not log_values:
-        sSFR = np.log10(sSFR)
-    if not withscatter:
-        t1 = np.array([0.,])
-        t2 = np.array([0.,])
-    else:
-        t1 = np.array([-0.01, 0., +0.01])
-        t2 = np.array([-0.12, 0., +0.12])
-
-    res = []
-    for _sSFR in sSFR:
-        _tmp = (0.75 + t1) * _sSFR + (6.24 + t2)
-        if not log_values:
-            _tmp = 10**_tmp
-        _tmp = tuple(_tmp) if len(tuple(_tmp)) > 1 else _tmp[0]
-        res.append(_tmp)
-
-    if len(res) == 1:
-        res = res[0]
-    return res
-
-def calc_bincentres_where_not_nan(value_arr, x_mesh, y_mesh):
-    bincentres = []
-    for (value,
-         x_lower, x_upper,
-         y_lower, y_upper) in zip(value_arr.flat,
-                                  x_mesh[:-1, :-1].flat, x_mesh[1:, 1:].flat,
-                                  y_mesh[:-1, 1:].flat, y_mesh[1:, :-1].flat):
-        if not np.isnan(value):
-            bincentres.append([0.5 * (x_lower + x_upper), 0.5 * (y_lower + y_upper)])
-
-    return np.array(bincentres)
 
 def plot_initial_conditions(mstar, SFR, mgas, mhalo, mstar_mesh, sfr_mesh, sfr79_medians, n_binned_min, plot_dir):
     sfr79_range = (-2, 2)
@@ -162,7 +43,10 @@ def plot_initial_conditions(mstar, SFR, mgas, mhalo, mstar_mesh, sfr_mesh, sfr79
                         stop=np.max(mstar_mesh),
                         num=1000,
                         endpoint=True)
-    ax_obs.plot(GMS_x, GMS_Saintonge2016(GMS_x), color='xkcd:magenta', ls='--')
+    ax_obs.plot(GMS_x, sgm.GMS_Saintonge2016(GMS_x),
+                color='xkcd:purplish pink', ls=':', label="Saintonge et al. 2016")
+    ax_obs.plot(GMS_x, sgm.GMS_Saintonge2022(GMS_x),
+                color='xkcd:magenta', ls='--', label="Saintonge & Catinella 2022")
     mhalo_color_range = (np.min(np.log10(mhalo)), np.max(np.log10(mhalo)))
     cmap_mhalo = mpl.cm.RdPu
     norm_mhalo = mpl.colors.Normalize(vmin=mhalo_color_range[0], vmax=mhalo_color_range[1])
@@ -197,6 +81,7 @@ def plot_initial_conditions(mstar, SFR, mgas, mhalo, mstar_mesh, sfr_mesh, sfr79
     ax_obs.set_xlabel(r'log $M_\star$ [$M_\odot$]')
     ax_obs.set_ylabel(r'log SFR [$M_\odot \, yr^{-1}$]')
     ax_obs.text(0.05, 0.95, f"only showing bins with {n_binned_min} or more objects", transform=ax_obs.transAxes)
+    ax_obs.legend(title=" Galaxy Main Sequence at 0.01 < z < 0.05:  ", loc='lower right')
     fig.savefig(plot_dir / f'mstar_SFR_obs_vs_ICs_of_sims_{datetime.now().strftime("%Y.%m.%d-%H.%M.%S")}.png')
     return fig, ax_obs
 
@@ -350,7 +235,6 @@ def main():
     plot_dir = project_dir / 'plots' / '_tmp' / date_and_time_str
     plot_dir.mkdir()
     out_dir = project_dir / 'outputs' / '_tmp' / date_and_time_str  # only defining the path, not creating yet
-    # out_dir.mkdir()  # make the output sub-directory
 
 
     # SDSS
@@ -365,7 +249,7 @@ def main():
     sfr79_medians = np.where(n_binned >= n_binned_min, sfr79_medians, np.nan)
 
     # getting the mstar-SFR bin cells that do have observational results
-    mstar_and_SFR = calc_bincentres_where_not_nan(sfr79_medians, mstar_mesh, sfr_mesh)
+    mstar_and_SFR = sgm.calc_bincentres_where_not_nan(sfr79_medians, mstar_mesh, sfr_mesh)
 
 
     # xCOLD GASS
@@ -381,19 +265,41 @@ def main():
 
 
     # use data from SDSS or xCG as initial conditions?
-    use_as_ICs = input(f"Specify which obs. data to base the galaxies on: (SDSS/xCG)")
+    use_as_ICs = input(f"Specify which data to base the galaxies on: (SDSS/xCG/GMS)")
 
     # intial values for Galaxy properties
     if use_as_ICs.casefold() == "SDSS".casefold():  # SDSS
         mstar = 10**mstar_and_SFR[:, 0]
         SFR = 10**mstar_and_SFR[:, 1] * 10**9   # CONVERSION of 'per yr' (obs) to 'per Gyr' (sims)
         sSFR = SFR / mstar
-        mgas = calculate_mgas_mstar_from_sSFR(sSFR / 10**9, log_values=False, withscatter=False) * mstar
+        mgas = sgm.calculate_mgas_mstar_from_sSFR(sSFR / 10**9, log_values=False, withscatter=False) * mstar
+        z = 0.
     elif use_as_ICs.casefold() == "xCG".casefold():  # xCG
         mstar = 10**xCG_mstar
         SFR = 10**xCG_SFR * 10**9   # CONVERSION of 'per yr' (obs) to 'per Gyr' (sims)
         sSFR = SFR / mstar
         mgas = 10**xCG_mgas
+        z = 0.
+    elif use_as_ICs.casefold() == "GMS".casefold():  # galaxies on GMS or off GMS, at redshift to be specified
+        # input
+        try:
+            mstar_min = float(input(f"Lowest stellar mass of the galaxies: (log(mstar/M☉), default: 7)") or 7.)
+            mstar_max = float(input(f"Highest stellar mass of the galaxies: (log(mstar/M☉), default: 12)") or 12.)
+            mstar_n = int(input(f"Number of galaxies between "
+                                f"log(mstar/M☉) = {mstar_min} to {mstar_max}: (default: 50)") or 50)
+            z = float(input(f"Redshift of the GMS: (default: 0)") or 0.)
+            SFR_offset = float(input(f"Offset ΔSFR of galaxies from the GMS: (log(ΔSFR/M☉ yr⁻¹), default: 0)") or 0.)
+        except ValueError:
+            print("Some input value(s) could not be converted to numeric value(s)")
+            mstar_min, mstar_max, mstar_n, z, SFR_offset = tuple([None] * 5)  # will crash the code in the next lines
+
+        # calc IC values
+        mstar_log = np.linspace(mstar_min, mstar_max, mstar_n)
+        sfr_log = sgm.GMS_Leslie2020(mstar_log, z=z, log=True)
+        mstar = 10**mstar_log
+        SFR = 10**(sfr_log + SFR_offset) * 10**9   # CONVERSION of 'per yr' (obs) to 'per Gyr' (sims)
+        sSFR = SFR / mstar
+        mgas = sgm.calculate_mgas_mstar_from_sSFR(sSFR / 10**9, log_values=False, withscatter=False) * mstar
     elif isinstance(use_as_ICs, str):
         raise ValueError
     else:
@@ -401,19 +307,21 @@ def main():
 
     # SFE = np.array([1.] * len(mstar))
     SFE = SFR / mgas   # set SFE to one (a.t.m. const) unique value, in harmony with the sSFR relation (through mgas)
-    # fgal = np.array([0.1] * len(mstar))
-    # fgal = np.array([0.01] * len(mstar))
-    # fgal = np.array([0.005] * len(mstar))
     fgal = np.array([0.4] * len(mstar))  # following Lilly+13
+    # fgal = np.array([0.3] * len(mstar))  # slightly lower accretion than Lilly+13
+    # fgal = np.array([0.5] * len(mstar))  # slightly higher accretion than Lilly+13
     MLF = np.array([0.1] * len(mstar))
     # MLF = np.array([0.05] * len(mstar))
     # MLF = np.array([0.2] * len(mstar))
 
     # initial values for Halo properties
-    mhalo = np.array([iter_mhalo_from_mstar(mstar_i) for mstar_i in mstar])
+    mhalo = np.array([sgm.iter_mhalo_from_mstar(mstar_i, z=z, try_lookup=False, interpolate=True) for mstar_i in mstar])
     # BDR = np.array([0.2] * len(mstar))
     BDR = np.array([0.15] * len(mstar))  # actual value from Lilly+13
     HLF = np.array([0.1] * len(mstar))
+
+    # # initial values of Environment properties
+    # z = 0. if z is None else z  # set z = 0. if no other value has been set yet (e.g. through input)
 
 
     # # OLD INTERMEDIATE PLOTTING (worked fine, just SFR79 and mgas)
@@ -491,7 +399,7 @@ def main():
     IC_halo_HLF = sgm.IC.single_param('HLF', HLF)
 
     # Environment IC
-    IC_env_zstart = sgm.IC.single_param('zstart', [0.])  # can also use 'lookbacktime' (Gyrs) instead of zstart
+    IC_env_zstart = sgm.IC.single_param('zstart', [z])  # can also use 'lookbacktime' (Gyrs) instead of zstart
     # IC_env_lookbacktime = sgm.IC.single_param('lookbacktime', [0.8])  # THIS IS FOR FORWARDS, THEN BACKWARDS COMPARISON
 
     # combine into one IC object for Environment, one for Halos and one for Galaxies
@@ -583,16 +491,61 @@ def main():
         # )
 
 
-        # THIS IS JUST BACKWARDS INTEGRATION FROM z=0, BUT FARTHER
+        # # THIS IS JUST BACKWARDS INTEGRATION FROM z=0, BUT FARTHER
+        #
+        # # create BACKWARD integrator
+        # Integrator = sgm.FTI(
+        #     env=env,
+        #     evolve_method='evolve',
+        #     dt=-1.e-3,
+        #     # dt=-1.e-4,
+        #     t_start=env.lookbacktime,
+        #     t_end=2
+        # )
+        #
+        # # run the BACKWARD integrator
+        # print("Starting integration")
+        # Integrator.integrate(
+        #     wtd=1,
+        #     # wtd=10,
+        #     outdir=out_dir / "0_backward_2Gyr_dt1e-3",
+        #     # outdir=out_dir / "0_backward_2Gyr_dt1e-4_wtd10",
+        #     single_snapshots=False
+        # )
+
+
+
+        # # THIS IS JUST FORWARDS INTEGRATION FROM z SET EARLIER, RUNNING FOR 1 Gyr
+        #
+        # # create BACKWARD integrator
+        # Integrator = sgm.FTI(
+        #     env=env,
+        #     evolve_method='evolve',
+        #     dt=1.e-3,
+        #     t_start=env.lookbacktime,
+        #     t_end=env.lookbacktime - 1.
+        # )
+        #
+        # # run the BACKWARD integrator
+        # print("Starting integration")
+        # Integrator.integrate(
+        #     wtd=1,
+        #     # wtd=10,
+        #     outdir=out_dir / f"0_forward_from_z{z}_1Gyr_dt1e-3_SFRoffset{SFR_offset}",
+        #     single_snapshots=False
+        # )
+
+
+
+        # THIS IS FORWARDS INTEGRATION FROM z SET EARLIER, RUNNING UNTIL z=0
 
         # create BACKWARD integrator
         Integrator = sgm.FTI(
             env=env,
             evolve_method='evolve',
-            dt=-1.e-3,
-            # dt=-1.e-4,
+            dt=1.e-3,
             t_start=env.lookbacktime,
-            t_end=2
+            t_end=0.
         )
 
         # run the BACKWARD integrator
@@ -600,10 +553,10 @@ def main():
         Integrator.integrate(
             wtd=1,
             # wtd=10,
-            outdir=out_dir / "0_backward_2Gyr_dt1e-3",
-            # outdir=out_dir / "0_backward_2Gyr_dt1e-4_wtd10",
+            outdir=out_dir / f"0_forward_from_z{z}_to_z0_dt1e-3_SFRoffset{SFR_offset}",
             single_snapshots=False
         )
+
 
     elif (run_sim == "n".casefold()) or (run_sim == "no".casefold()):
         print("Integration not started as per user input")
