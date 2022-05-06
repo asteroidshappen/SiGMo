@@ -21,9 +21,16 @@ def join_paths(path1, path2):
     return combipath
 
 def assign_with_warning(target, value, warning: bool = True):
-    """Simple assigning of value to target that warns if value not 'equal' ot target"""
+    """
+    Simple assigning of value to target that warns if value not 'equal' ot target
+
+    :param target: target variable whose value will be overwritten by value
+    :param value: new value to be written into target
+    :param warning: flags whether non-equality between target and value raises an error (default: True)
+    :return: always returns value
+    """
     if (value != target) and warning:
-        print(f"WARNING! Not identical, {target!r} replaced by {value!r}")
+        warnings.warn(f"WARNING! {target!r} and {value!r} not identical!")
     return value
 
 def split_path_and_name(inpath, sep='_'):
