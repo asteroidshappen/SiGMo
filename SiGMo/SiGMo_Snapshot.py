@@ -13,9 +13,20 @@ from datetime import datetime
 
 # Defining additional helper methods
 def join_paths(path1, path2):
-    """Join two paths or a path and a filename, assuming that if they're not strings, then they're path objects"""
+    """
+    Join two paths or a path and a filename, assuming that if they're not strings, then they're path objects
+
+    :param path1: first path
+    :param path2: second path
+    :return: combined paths
+    """
     if (type(path1) is str) and (type(path2) is str):
-        combipath = path1 + path2
+        if (path1[-1] == "/") ^ (path2[0] == "/"):
+            combipath = path1 + path2
+        elif (path1[-1] == "/") and (path2[0] == "/"):
+            combipath = path1[:-1] + path2
+        else:
+            combipath = path1 + "/" + path2
     else:
         combipath = path1 / path2
     return combipath
