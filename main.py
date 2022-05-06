@@ -235,7 +235,6 @@ def main():
     plot_dir = project_dir / 'plots' / '_tmp' / date_and_time_str
     plot_dir.mkdir()
     out_dir = project_dir / 'outputs' / '_tmp' / date_and_time_str  # only defining the path, not creating yet
-    # out_dir.mkdir()  # make the output sub-directory
 
 
     # SDSS
@@ -308,9 +307,9 @@ def main():
 
     # SFE = np.array([1.] * len(mstar))
     SFE = SFR / mgas   # set SFE to one (a.t.m. const) unique value, in harmony with the sSFR relation (through mgas)
-    # fgal = np.array([0.4] * len(mstar))  # following Lilly+13
+    fgal = np.array([0.4] * len(mstar))  # following Lilly+13
     # fgal = np.array([0.3] * len(mstar))  # slightly lower accretion than Lilly+13
-    fgal = np.array([0.5] * len(mstar))  # slightly higher accretion than Lilly+13
+    # fgal = np.array([0.5] * len(mstar))  # slightly higher accretion than Lilly+13
     MLF = np.array([0.1] * len(mstar))
     # MLF = np.array([0.05] * len(mstar))
     # MLF = np.array([0.2] * len(mstar))
