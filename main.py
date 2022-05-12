@@ -299,7 +299,11 @@ def main():
         mstar = 10**mstar_log
         SFR = 10**(sfr_log + SFR_offset) * 10**9   # CONVERSION of 'per yr' (obs) to 'per Gyr' (sims)
         sSFR = SFR / mstar
-        mgas = sgm.calculate_mgas_mstar_from_sSFR_Saintonge2022(sSFR / 10 ** 9, log_values=False, withscatter=False) * mstar
+        mgas = sgm.calculate_mgas_mstar_from_sSFR_Tacconi2020(sSFR=sSFR,
+                                                              mstar=mstar,
+                                                              z=z,
+                                                              log=False,
+                                                              withscatter=False) * mstar
     elif isinstance(use_as_ICs, str):
         raise ValueError
     else:
