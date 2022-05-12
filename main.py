@@ -272,7 +272,7 @@ def main():
         mstar = 10**mstar_and_SFR[:, 0]
         SFR = 10**mstar_and_SFR[:, 1] * 10**9   # CONVERSION of 'per yr' (obs) to 'per Gyr' (sims)
         sSFR = SFR / mstar
-        mgas = sgm.calculate_mgas_mstar_from_sSFR(sSFR / 10**9, log_values=False, withscatter=False) * mstar
+        mgas = sgm.calculate_mgas_mstar_from_sSFR_Saintonge2022(sSFR / 10 ** 9, log_values=False, withscatter=False) * mstar
         z = 0.
     elif use_as_ICs.casefold() == "xCG".casefold():  # xCG
         mstar = 10**xCG_mstar
@@ -299,7 +299,7 @@ def main():
         mstar = 10**mstar_log
         SFR = 10**(sfr_log + SFR_offset) * 10**9   # CONVERSION of 'per yr' (obs) to 'per Gyr' (sims)
         sSFR = SFR / mstar
-        mgas = sgm.calculate_mgas_mstar_from_sSFR(sSFR / 10**9, log_values=False, withscatter=False) * mstar
+        mgas = sgm.calculate_mgas_mstar_from_sSFR_Saintonge2022(sSFR / 10 ** 9, log_values=False, withscatter=False) * mstar
     elif isinstance(use_as_ICs, str):
         raise ValueError
     else:

@@ -322,9 +322,9 @@ def iter_mhalo_from_mstar(
 
 # Gas Mass to Stellar Mass Relation
 
-def calculate_mgas_mstar_from_sSFR(sSFR, log_values=False, withscatter=False):
+def calculate_mgas_mstar_from_sSFR_Saintonge2022(sSFR, log_values=False, withscatter=False):
     """
-    Calculates the M_H2 / M_star ratio from the relation to SSFR according to Saintonge & Catinella 2021 (review), Eq. 5
+    Calculates the M_H2 / M_star ratio from the relation to SSFR according to Saintonge & Catinella 2022 (review), Eq. 5
     Input values can be either in log or lin, and scatter can be included in the output as well.
 
     :param sSFR: Specific star formation rate in solar masses per year, and in log(M_sol/yr) if log_values = True
