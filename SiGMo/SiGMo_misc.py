@@ -98,7 +98,7 @@ def GMS_sSFR_Speagle2014(mstar, z: float=None, tc: float=None, log=True):
     :param z: redshift of the galaxy
     :param tc: cosmic time at which the galaxy exists
     :param log: flag to switch between logarithmic in/output (log=True, default), and linear in/output (log=False)
-    :return: specific star formation rate, in units of 1/Gyr
+    :return: specific star formation rate, in units of 1/yr (the original prescription is in units of 1/Gyr!)
     """
     # switch between log and lin I/O
     log_mstar = np.log10(mstar) if not log else mstar
@@ -413,8 +413,9 @@ def calculate_mgas_mstar_from_sSFR_Tacconi2020(sSFR, mstar, z, log=True, withsca
     # calculate for each entry
     log_res = []
     for _sSFR, _mstar in zip(sSFR, mstar):
-        # calculate Spseagle+14 MS sSFR
+        # calculate Speagle+14 MS sSFR
         sSFR_MS = GMS_sSFR_Speagle2014(mstar=_mstar, z=z, log=log)
+        sSFR_MS = sSFR_MS * 10**9 if not log else sSFR_MS + 9
 
         # compute individ. terms (depending on whether values are handled linearly of logarithmically)
         Term_AB = A + B * (np.log10(1 + z) - F)**2
