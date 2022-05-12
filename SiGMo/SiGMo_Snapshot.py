@@ -10,8 +10,8 @@ import os
 # date and time
 from datetime import datetime
 
-# import
-import SiGMo as sgm
+# import some helper methods
+from SiGMo import join_paths, assign_with_warning
 
 
 # Defining additional helper methods
@@ -180,7 +180,7 @@ class Snapshot:
     def save_to_disk(self, filepath: str = None):
         """Save snapshot's data dict. to json file. Additional attributes used to make filename/path if not included"""
         # concat dirpath and filename depending on whether they're strings or not (assumed path objects)
-        filepath = sgm.join_paths(self.dirpath, self.filename) if filepath is None else filepath
+        filepath = join_paths(self.dirpath, self.filename) if filepath is None else filepath
 
         # write the file
         with open(filepath, 'w') as outfile:
@@ -190,7 +190,7 @@ class Snapshot:
     def update_from_disk(self, filepath: str = None, warning=True):
         """Load a snapshot from json file on disk and update current object. The filepath needs to be passed."""
         # concat dirpath and filename depending on whether they're strings or not (assumed path objects)
-        filepath = sgm.join_paths(self.dirpath, self.filename) if filepath is None else filepath
+        filepath = join_paths(self.dirpath, self.filename) if filepath is None else filepath
 
         # read the file and storing the input (dict format) in data attribute
         with open(filepath, 'r') as infile:
@@ -200,11 +200,11 @@ class Snapshot:
         dirpath, filename, prefix, basename, snaptime, extension = split_path_and_name(filepath)
 
         # save re-constructed attr in obj
-        self.dirpath = sgm.assign_with_warning(self.dirpath, dirpath, warning)
-        self.filename = sgm.assign_with_warning(self.filename, filename, warning)
-        self.prefix = sgm.assign_with_warning(self.prefix, prefix, warning)
-        self.basename = sgm.assign_with_warning(self.basename, basename, warning)
-        self.snaptime = sgm.assign_with_warning(self.snaptime, snaptime, warning)
+        self.dirpath = assign_with_warning(self.dirpath, dirpath, warning)
+        self.filename = assign_with_warning(self.filename, filename, warning)
+        self.prefix = assign_with_warning(self.prefix, prefix, warning)
+        self.basename = assign_with_warning(self.basename, basename, warning)
+        self.snaptime = assign_with_warning(self.snaptime, snaptime, warning)
         return self.data
 
     @classmethod
