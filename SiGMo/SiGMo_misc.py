@@ -356,6 +356,74 @@ def calculate_mgas_mstar_from_sSFR(sSFR, log_values=False, withscatter=False):
     return res
 
 
+def calculate_mgas_mstar_from_sSFR_Tacconi2018(sSFR, mstar, z, fit=True):
+    # fit parameters acc. to Table 3(b), Tacconi+2018: "Best β=2 W14"
+    beta = 2
+
+    A = 0.16
+    dA = 0.15
+
+    B = -3.69
+    dB = 0.4
+
+    F = 0.65
+    dF = 0.1
+
+    C = 0.52
+    dC = 0.03
+
+    D = -0.36
+    dD = 0.03
+
+    # need to hand-in
+    deltaMstar = 1
+
+    # preliminary calculations
+
+    # THIS DOES NOT WORK (YET)!!!
+    sSFR_MS = None  # sSFR from W14 main-sequence (NOT IMPLEMENTED "YET", and we switched to other prescription)
+    # THIS DOES NOT WORK (YET)!!!
+
+    deltaMstar = mstar / (5 * 10**10)
+
+    # calculate the fit
+    deltaMS = sSFR / sSFR_MS
+    log_mu = A + B * (np.log10(1 + z) - F)**beta + C * np.log10(deltaMS) + D * np.log10(deltaMstar)
+
+
+    # this is the general form, not the fit (as the latter requires information about the half-light radius at 5000 Å)
+
+    # not done "YET" (maybe never, due to switch to Tacconi+2020 prescription
+
+
+    return
+
+
+def calculate_mgas_mstar_from_sSFR_Tacconi2020(sSFR, mstar, z, log=True, withscatter=False):
+    # set fit parameters
+    A = np.array([0.06]*3) + [-0.2, 0., 0.2]
+    B = np.array([-3.33]*3) + [-0.2, 0., 0.2]
+    F = np.array([0.65]*3) + [-0.05, 0., 0.05]
+    C = np.array([0.51]*3) + [-0.03, 0., 0.03]
+    D = np.array([-0.41]*3) + [-0.03, 0., 0.03]
+
+    # calculate Speagle+14 MS sSFR
+    sSFR_MS = GMS_sSFR_Speagle2014(mstar=mstar, z=z, log=log)
+
+    # compute individ. terms (depending on whether values are handled linearly of logarithmically)
+    Term_AB = A + B * (np.log10(1 + z) - F)**2
+    Term_C = C * np.log10(sSFR/sSFR_MS) if not log else C * (sSFR - sSFR_MS)
+    Term_D = D * (np.log10(mstar) - 10.7) if not log else D * (mstar - 10.7)
+
+    # add terms together
+    log_mgas_mstar = Term_AB + Term_C + Term_D
+
+    # do we return only the value or value and scatter?
+    log_res = log_mgas_mstar if withscatter else log_mgas_mstar[1]
+
+    return log_res if log else 10**log_res
+
+
 # Useful Helper Methods
 
 def calc_bincentres_where_not_nan(value_arr, x_mesh, y_mesh):
