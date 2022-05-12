@@ -400,6 +400,9 @@ def calculate_mgas_mstar_from_sSFR_Tacconi2018(sSFR, mstar, z, fit=True):
 
 
 def calculate_mgas_mstar_from_sSFR_Tacconi2020(sSFR, mstar, z, log=True, withscatter=False):
+    sSFR = np.array(sSFR)
+    mstar = np.array(mstar)
+
     # set fit parameters
     A = np.array([0.06]*3) + [-0.2, 0., 0.2]
     B = np.array([-3.33]*3) + [-0.2, 0., 0.2]
@@ -407,19 +410,23 @@ def calculate_mgas_mstar_from_sSFR_Tacconi2020(sSFR, mstar, z, log=True, withsca
     C = np.array([0.51]*3) + [-0.03, 0., 0.03]
     D = np.array([-0.41]*3) + [-0.03, 0., 0.03]
 
-    # calculate Speagle+14 MS sSFR
-    sSFR_MS = GMS_sSFR_Speagle2014(mstar=mstar, z=z, log=log)
+    # calculate for each entry
+    log_res = []
+    for _sSFR, _mstar in zip(sSFR, mstar):
+        # calculate Speagle+14 MS sSFR
+        sSFR_MS = GMS_sSFR_Speagle2014(mstar=_mstar, z=z, log=log)
 
-    # compute individ. terms (depending on whether values are handled linearly of logarithmically)
-    Term_AB = A + B * (np.log10(1 + z) - F)**2
-    Term_C = C * np.log10(sSFR/sSFR_MS) if not log else C * (sSFR - sSFR_MS)
-    Term_D = D * (np.log10(mstar) - 10.7) if not log else D * (mstar - 10.7)
+        # compute individ. terms (depending on whether values are handled linearly of logarithmically)
+        Term_AB = A + B * (np.log10(1 + z) - F)**2
+        Term_C = C * np.log10(_sSFR/sSFR_MS) if not log else C * (_sSFR - sSFR_MS)
+        Term_D = D * (np.log10(_mstar) - 10.7) if not log else D * (_mstar - 10.7)
 
-    # add terms together
-    log_mgas_mstar = Term_AB + Term_C + Term_D
+        # add terms together
+        log_mgas_mstar = Term_AB + Term_C + Term_D
 
-    # do we return only the value or value and scatter?
-    log_res = log_mgas_mstar if withscatter else log_mgas_mstar[1]
+        # do we return only the value or value and scatter?
+        log_res.append(log_mgas_mstar if withscatter else log_mgas_mstar[1])
+    log_res = np.array(log_res)
 
     return log_res if log else 10**log_res
 
