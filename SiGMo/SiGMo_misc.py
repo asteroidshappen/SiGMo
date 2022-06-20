@@ -98,7 +98,7 @@ def GMS_sSFR_Speagle2014(mstar, z: float=None, tc: float=None, log=True):
     :param z: redshift of the galaxy
     :param tc: cosmic time at which the galaxy exists
     :param log: flag to switch between logarithmic in/output (log=True, default), and linear in/output (log=False)
-    :return: specific star formation rate, in units of 1/Gyr
+    :return: specific star formation rate, in units of 1/yr (the original prescription is in units of 1/Gyr!)
     """
     # switch between log and lin I/O
     log_mstar = np.log10(mstar) if not log else mstar
@@ -322,9 +322,9 @@ def iter_mhalo_from_mstar(
 
 # Gas Mass to Stellar Mass Relation
 
-def calculate_mgas_mstar_from_sSFR(sSFR, log_values=False, withscatter=False):
+def calculate_mgas_mstar_from_sSFR_Saintonge2022(sSFR, log_values=False, withscatter=False):
     """
-    Calculates the M_H2 / M_star ratio from the relation to SSFR according to Saintonge & Catinella 2021 (review), Eq. 5
+    Calculates the M_H2 / M_star ratio from the relation to SSFR according to Saintonge & Catinella 2022 (review), Eq. 5
     Input values can be either in log or lin, and scatter can be included in the output as well.
 
     :param sSFR: Specific star formation rate in solar masses per year, and in log(M_sol/yr) if log_values = True
@@ -354,6 +354,82 @@ def calculate_mgas_mstar_from_sSFR(sSFR, log_values=False, withscatter=False):
     if len(res) == 1:
         res = res[0]
     return res
+
+
+def calculate_mgas_mstar_from_sSFR_Tacconi2018(sSFR, mstar, z, fit=True):
+    # fit parameters acc. to Table 3(b), Tacconi+2018: "Best β=2 W14"
+    beta = 2
+
+    A = 0.16
+    dA = 0.15
+
+    B = -3.69
+    dB = 0.4
+
+    F = 0.65
+    dF = 0.1
+
+    C = 0.52
+    dC = 0.03
+
+    D = -0.36
+    dD = 0.03
+
+    # need to hand-in
+    deltaMstar = 1
+
+    # preliminary calculations
+
+    # THIS DOES NOT WORK (YET)!!!
+    sSFR_MS = None  # sSFR from W14 main-sequence (NOT IMPLEMENTED "YET", and we switched to other prescription)
+    # THIS DOES NOT WORK (YET)!!!
+
+    deltaMstar = mstar / (5 * 10**10)
+
+    # calculate the fit
+    deltaMS = sSFR / sSFR_MS
+    log_mu = A + B * (np.log10(1 + z) - F)**beta + C * np.log10(deltaMS) + D * np.log10(deltaMstar)
+
+
+    # this is the general form, not the fit (as the latter requires information about the half-light radius at 5000 Å)
+
+    # not done "YET" (maybe never, due to switch to Tacconi+2020 prescription
+
+
+    return
+
+
+def calculate_mgas_mstar_from_sSFR_Tacconi2020(sSFR, mstar, z, log=True, withscatter=False):
+    sSFR = np.array(sSFR)
+    mstar = np.array(mstar)
+
+    # set fit parameters
+    A = np.array([0.06]*3) + [-0.2, 0., 0.2]
+    B = np.array([-3.33]*3) + [-0.2, 0., 0.2]
+    F = np.array([0.65]*3) + [-0.05, 0., 0.05]
+    C = np.array([0.51]*3) + [-0.03, 0., 0.03]
+    D = np.array([-0.41]*3) + [-0.03, 0., 0.03]
+
+    # calculate for each entry
+    log_res = []
+    for _sSFR, _mstar in zip(sSFR, mstar):
+        # calculate Speagle+14 MS sSFR
+        sSFR_MS = GMS_sSFR_Speagle2014(mstar=_mstar, z=z, log=log)
+        sSFR_MS = sSFR_MS * 10**9 if not log else sSFR_MS + 9
+
+        # compute individ. terms (depending on whether values are handled linearly of logarithmically)
+        Term_AB = A + B * (np.log10(1 + z) - F)**2
+        Term_C = C * np.log10(_sSFR/sSFR_MS) if not log else C * (_sSFR - sSFR_MS)
+        Term_D = D * (np.log10(_mstar) - 10.7) if not log else D * (_mstar - 10.7)
+
+        # add terms together
+        log_mgas_mstar = Term_AB + Term_C + Term_D
+
+        # do we return only the value or value and scatter?
+        log_res.append(log_mgas_mstar if withscatter else log_mgas_mstar[1])
+    log_res = np.array(log_res)
+
+    return log_res if log else 10**log_res
 
 
 # Useful Helper Methods

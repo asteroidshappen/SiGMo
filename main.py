@@ -272,7 +272,7 @@ def main():
         mstar = 10**mstar_and_SFR[:, 0]
         SFR = 10**mstar_and_SFR[:, 1] * 10**9   # CONVERSION of 'per yr' (obs) to 'per Gyr' (sims)
         sSFR = SFR / mstar
-        mgas = sgm.calculate_mgas_mstar_from_sSFR(sSFR / 10**9, log_values=False, withscatter=False) * mstar
+        mgas = sgm.calculate_mgas_mstar_from_sSFR_Saintonge2022(sSFR / 10 ** 9, log_values=False, withscatter=False) * mstar
         z = 0.
     elif use_as_ICs.casefold() == "xCG".casefold():  # xCG
         mstar = 10**xCG_mstar
@@ -299,17 +299,25 @@ def main():
         mstar = 10**mstar_log
         SFR = 10**(sfr_log + SFR_offset) * 10**9   # CONVERSION of 'per yr' (obs) to 'per Gyr' (sims)
         sSFR = SFR / mstar
-        mgas = sgm.calculate_mgas_mstar_from_sSFR(sSFR / 10**9, log_values=False, withscatter=False) * mstar
+        # mgas = sgm.calculate_mgas_mstar_from_sSFR_Tacconi2020(sSFR=sSFR,
+        #                                                       mstar=mstar,
+        #                                                       z=z,
+        #                                                       log=False,
+        #                                                       withscatter=False) * mstar
+        SFE = np.array([1.5] * len(mstar))
+        mgas = SFR / SFE
     elif isinstance(use_as_ICs, str):
         raise ValueError
     else:
         raise TypeError
 
     # SFE = np.array([1.] * len(mstar))
-    SFE = SFR / mgas   # set SFE to one (a.t.m. const) unique value, in harmony with the sSFR relation (through mgas)
-    fgal = np.array([0.4] * len(mstar))  # following Lilly+13
+    # SFE = SFR / mgas   # set SFE to one (a.t.m. const) unique value, in harmony with the sSFR relation (through mgas)
+    # fgal = np.array([0.4] * len(mstar))  # following Lilly+13
     # fgal = np.array([0.3] * len(mstar))  # slightly lower accretion than Lilly+13
     # fgal = np.array([0.5] * len(mstar))  # slightly higher accretion than Lilly+13
+    # fgal = np.array([0.1] * len(mstar))  # significantly lower than Lilly+13
+    fgal = np.array([0.01] * len(mstar))  # ridiculously much lower than Lilly+13
     MLF = np.array([0.1] * len(mstar))
     # MLF = np.array([0.05] * len(mstar))
     # MLF = np.array([0.2] * len(mstar))
