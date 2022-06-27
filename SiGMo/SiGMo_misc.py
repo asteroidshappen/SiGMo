@@ -4,7 +4,7 @@ from astropy.table import Table
 from astropy.cosmology import Planck18 as cosmo
 
 import warnings
-import tqdm
+from tqdm import tqdm
 
 
 # Galaxy Main Sequence WITH flattening
