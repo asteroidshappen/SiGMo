@@ -444,6 +444,9 @@ class Halo(AstroObject):
         The name of the galaxy (default 'Test_Env')
     sMIR : float, optional
         The specific mass increase rate (accretion) of the DM halo (default 0.)
+    sMIR_scaling : float, optional
+        Artificial scaling (multiplicative increase or decrease) of the specific
+        halo accretion rate, e.g. to explore increased accretion
     z : float, optional
         The current redshift of the system (default None)
     zstart : float, optional
@@ -475,6 +478,7 @@ class Halo(AstroObject):
                  mtot: float = None,
                  name: str = "Test_Halo",
                  sMIR: float = None,
+                 sMIR_scaling = 1.,
                  z: float = None
                  ):
         self.env = env
@@ -493,6 +497,7 @@ class Halo(AstroObject):
         self.name = name
         self.previous = None
         self.sMIR = sMIR
+        self.sMIR_scaling = sMIR_scaling
         self.z = env.z if z is None else z
 
         # re-set sMIR and MIR: don't want to set them properly earlier b/c order of attr. wouldn't be alphabetic
@@ -732,14 +737,25 @@ class Halo(AstroObject):
 
     def compute_sMIR(self,
                      mtot: float = None,
+                     sMIR_scaling: float = None,
                      z: float = None
                      ) -> float:
-        """Computes the specific Mass Increase Rate of the DM halo
-        accoding to Lilly et al. 2013, Eq. (3), more precise version"""
+        """
+        Computes the specific Mass Increase Rate of the DM halo
+        accoding to Lilly et al. 2013, Eq. (3), more precise version.
+        Modified to include an optional scaling factor to regulate
+        accretion rate on the halo in total
+
+        :param mtot:
+        :param sMIR_scaling:
+        :param z:
+        :return:
+        """
         mtot = self.mtot if mtot is None else mtot
+        sMIR_scaling = self.sMIR_scaling if sMIR_scaling is None else sMIR_scaling
         z = self.z if z is None else z
 
-        return 0.027 * (mtot / 10 ** 12) ** (0.15) * (1 + z + 0.1 * ((1 + z) ** (-1.25))) ** 2.5
+        return sMIR_scaling * 0.027 * (mtot / 10 ** 12) ** (0.15) * (1 + z + 0.1 * ((1 + z) ** (-1.25))) ** 2.5
 
 
 # ========================================================
