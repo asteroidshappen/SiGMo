@@ -446,7 +446,7 @@ class Halo(AstroObject):
         The specific mass increase rate (accretion) of the DM halo (default 0.)
     sMIR_scaling : float, optional
         Artificial scaling (multiplicative increase or decrease) of the specific
-        halo accretion rate, e.g. to explore increased accretion
+        halo accretion rate, e.g. to explore increased accretion (default 1.)
     z : float, optional
         The current redshift of the system (default None)
     zstart : float, optional
