@@ -273,12 +273,14 @@ def main():
         SFR = 10**mstar_and_SFR[:, 1] * 10**9   # CONVERSION of 'per yr' (obs) to 'per Gyr' (sims)
         sSFR = SFR / mstar
         mgas = sgm.calculate_mgas_mstar_from_sSFR_Saintonge2022(sSFR / 10 ** 9, log_values=False, withscatter=False) * mstar
+        SFE = SFR / mgas   # set SFE to one (a.t.m. const) unique value, in harmony with the sSFR relation (through mgas)
         z = 0.
     elif use_as_ICs.casefold() == "xCG".casefold():  # xCG
         mstar = 10**xCG_mstar
         SFR = 10**xCG_SFR * 10**9   # CONVERSION of 'per yr' (obs) to 'per Gyr' (sims)
         sSFR = SFR / mstar
         mgas = 10**xCG_mgas
+        SFE = SFR / mgas   # set SFE to one (a.t.m. const) unique value, in harmony with the sSFR relation (through mgas)
         z = 0.
     elif use_as_ICs.casefold() == "GMS".casefold():  # galaxies on GMS or off GMS, at redshift to be specified
         # input
@@ -311,13 +313,24 @@ def main():
     else:
         raise TypeError
 
+
+    # change the overall accretion scaling (aka sMIR_scaling) from the default 1?
+    sMIR_scaling_basefactor = float(input(f"Enter off-GMS sMIR accretion scaling: (Gyr⁻¹ / dex ΔSFR, default: 0)") or 0.)
+    if sMIR_scaling_basefactor == 1:
+        sMIR_scaling = np.array([1.] * len(mstar))
+    else:
+        sfr_gms = sgm.GMS_Leslie2020(mstar, z=z, log=False) * 10**9   # conversion from yr⁻¹ to Gyr⁻¹ (like SFR)
+        delta_sfr_log = np.log10(SFR / sfr_gms)
+        sMIR_scaling = np.array([1.] * len(mstar)) * (sMIR_scaling_basefactor**delta_sfr_log)
+
+
     # SFE = np.array([1.] * len(mstar))
     # SFE = SFR / mgas   # set SFE to one (a.t.m. const) unique value, in harmony with the sSFR relation (through mgas)
-    # fgal = np.array([0.4] * len(mstar))  # following Lilly+13
+    fgal = np.array([0.4] * len(mstar))  # following Lilly+13
     # fgal = np.array([0.3] * len(mstar))  # slightly lower accretion than Lilly+13
     # fgal = np.array([0.5] * len(mstar))  # slightly higher accretion than Lilly+13
     # fgal = np.array([0.1] * len(mstar))  # significantly lower than Lilly+13
-    fgal = np.array([0.01] * len(mstar))  # ridiculously much lower than Lilly+13
+    # fgal = np.array([0.01] * len(mstar))  # ridiculously much lower than Lilly+13
     MLF = np.array([0.1] * len(mstar))
     # MLF = np.array([0.05] * len(mstar))
     # MLF = np.array([0.2] * len(mstar))
@@ -405,6 +418,7 @@ def main():
     IC_halo_mdm = sgm.IC.single_param('mdm', (1. / (BDR + 1.)) * mhalo)
     IC_halo_mgas = sgm.IC.single_param('mgas', ((BDR / (BDR + 1.)) * mhalo) - (mgas + mstar))
     IC_halo_HLF = sgm.IC.single_param('HLF', HLF)
+    IC_halo_sMIR_scaling = sgm.IC.single_param('sMIR_scaling', sMIR_scaling)
 
     # Environment IC
     IC_env_zstart = sgm.IC.single_param('zstart', [z])  # can also use 'lookbacktime' (Gyrs) instead of zstart
@@ -417,7 +431,8 @@ def main():
                     IC_halo_BDR +
                     IC_halo_mdm +
                     IC_halo_mgas +
-                    IC_halo_HLF)
+                    IC_halo_HLF +
+                    IC_halo_sMIR_scaling)
     IC_gal_comb = (IC_gal_mstar +
                    IC_gal_SFR +
                    IC_gal_sSFR +
@@ -500,7 +515,7 @@ def main():
 
 
         # # THIS IS JUST BACKWARDS INTEGRATION FROM z=0, BUT FARTHER
-        #
+        # 
         # # create BACKWARD integrator
         # Integrator = sgm.FTI(
         #     env=env,
@@ -510,7 +525,7 @@ def main():
         #     t_start=env.lookbacktime,
         #     t_end=2
         # )
-        #
+        # 
         # # run the BACKWARD integrator
         # print("Starting integration")
         # Integrator.integrate(
@@ -545,15 +560,37 @@ def main():
 
 
 
-        # THIS IS FORWARDS INTEGRATION FROM z SET EARLIER, RUNNING UNTIL z=0
+        # # THIS IS FORWARDS INTEGRATION FROM z SET EARLIER, RUNNING UNTIL z=0
+        # 
+        # # create BACKWARD integrator
+        # Integrator = sgm.FTI(
+        #     env=env,
+        #     evolve_method='evolve',
+        #     dt=1.e-3,
+        #     t_start=env.lookbacktime,
+        #     t_end=0.
+        # )
+        # 
+        # # run the BACKWARD integrator
+        # print("Starting integration")
+        # Integrator.integrate(
+        #     wtd=1,
+        #     # wtd=10,
+        #     outdir=out_dir / f"0_forward_from_z{z}_to_z0_dt1e-3_SFRoffset{SFR_offset}",
+        #     single_snapshots=False
+        # )
+
+
+        # THIS (again) IS JUST BACKWARDS INTEGRATION FROM z=0, BUT FARTHER and with ΔSFR dependent sMIR scaling
 
         # create BACKWARD integrator
         Integrator = sgm.FTI(
             env=env,
             evolve_method='evolve',
-            dt=1.e-3,
+            dt=-1.e-3,
+            # dt=-1.e-4,
             t_start=env.lookbacktime,
-            t_end=0.
+            t_end=2
         )
 
         # run the BACKWARD integrator
@@ -561,7 +598,8 @@ def main():
         Integrator.integrate(
             wtd=1,
             # wtd=10,
-            outdir=out_dir / f"0_forward_from_z{z}_to_z0_dt1e-3_SFRoffset{SFR_offset}",
+            outdir=out_dir / f"0_backward_2Gyr_dt1e-3_sMIR_scaling_basefactor{sMIR_scaling_basefactor}",
+            # outdir=out_dir / "0_backward_2Gyr_dt1e-4_wtd10",
             single_snapshots=False
         )
 
