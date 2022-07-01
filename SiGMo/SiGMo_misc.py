@@ -432,47 +432,6 @@ def calculate_mgas_mstar_from_sSFR_Tacconi2020(sSFR, mstar, z, log=True, withsca
     return log_res if log else 10**log_res
 
 
-# Useful Helper Methods
-
-def calc_bincentres_where_not_nan(value_arr, x_mesh, y_mesh):
-    """
-    Calculates the bin centres from a 2-d array of values (value_arr) und two 2-d mesh arrays with corresponding bin
-    edges, for all 2-d bins where value_arr is not np.nan. Example: value_arr.shape = (10, 10) , then x_mesh.shape =
-    (11, 11) and y_mesh.shape = (11, 11) , as produced by np.meshgrid().
-
-    :param value_arr: 2-d array with values, e.g. bin counts. Non-relevant bins should be np.nan, so that their bin
-    centres are not calculated here and not included in the return array
-    :param x_mesh: 2-d array as produced by np.meshgrid() based on the bin edges of value_arr in x direction
-    :param y_mesh: 2-d array as produced by np.meshgrid() based on the bin edges of value_arr in y direction
-    :return: 2-d array with shape=(n,2), n being the entries in value_arr that are not np.nan, and the second dimension
-    having the x and y coordinates of the bin centre
-    """
-    bincentres = []
-    for (value,
-         x_lower, x_upper,
-         y_lower, y_upper) in zip(value_arr.flat,
-                                  x_mesh[:-1, :-1].flat, x_mesh[1:, 1:].flat,
-                                  y_mesh[:-1, 1:].flat, y_mesh[1:, :-1].flat):
-        if not np.isnan(value):
-            bincentres.append([0.5 * (x_lower + x_upper), 0.5 * (y_lower + y_upper)])
-
-    return np.array(bincentres)
-
-
-def find_nearest_index(arr, val):
-    """
-    Determines which index in arr (array) contains the value closest to val (value). If arr contains several elements of
-    the same value who all would fulfil that condition equally, the first element in order of traversion is returned.
-
-    :param arr: an array in which to search for the nearest match
-    :param val: the value for which the closest match is searched
-    :return: index in arr pointing to the (first) closest element to val
-    """
-    arr = np.asarray(arr)
-    nearest_i = (np.abs(arr - val)).argmin()
-    return nearest_i
-
-
 # SFR79 Star Formation Rate Change Parameter
 
 def compute_SFR79_from_SFR(gal_a):
@@ -515,6 +474,47 @@ def compute_SFR79_from_SFR(gal_a):
         # print(SFR79_grid_fl[i, 2])
 
     return SFR79_a
+
+
+# Useful Helper Methods
+
+def calc_bincentres_where_not_nan(value_arr, x_mesh, y_mesh):
+    """
+    Calculates the bin centres from a 2-d array of values (value_arr) und two 2-d mesh arrays with corresponding bin
+    edges, for all 2-d bins where value_arr is not np.nan. Example: value_arr.shape = (10, 10) , then x_mesh.shape =
+    (11, 11) and y_mesh.shape = (11, 11) , as produced by np.meshgrid().
+
+    :param value_arr: 2-d array with values, e.g. bin counts. Non-relevant bins should be np.nan, so that their bin
+    centres are not calculated here and not included in the return array
+    :param x_mesh: 2-d array as produced by np.meshgrid() based on the bin edges of value_arr in x direction
+    :param y_mesh: 2-d array as produced by np.meshgrid() based on the bin edges of value_arr in y direction
+    :return: 2-d array with shape=(n,2), n being the entries in value_arr that are not np.nan, and the second dimension
+    having the x and y coordinates of the bin centre
+    """
+    bincentres = []
+    for (value,
+         x_lower, x_upper,
+         y_lower, y_upper) in zip(value_arr.flat,
+                                  x_mesh[:-1, :-1].flat, x_mesh[1:, 1:].flat,
+                                  y_mesh[:-1, 1:].flat, y_mesh[1:, :-1].flat):
+        if not np.isnan(value):
+            bincentres.append([0.5 * (x_lower + x_upper), 0.5 * (y_lower + y_upper)])
+
+    return np.array(bincentres)
+
+
+def find_nearest_index(arr, val):
+    """
+    Determines which index in arr (array) contains the value closest to val (value). If arr contains several elements of
+    the same value who all would fulfil that condition equally, the first element in order of traversion is returned.
+
+    :param arr: an array in which to search for the nearest match
+    :param val: the value for which the closest match is searched
+    :return: index in arr pointing to the (first) closest element to val
+    """
+    arr = np.asarray(arr)
+    nearest_i = (np.abs(arr - val)).argmin()
+    return nearest_i
 
 
 def join_paths(path1, path2):
