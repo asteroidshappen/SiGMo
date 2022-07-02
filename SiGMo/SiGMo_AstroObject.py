@@ -447,6 +447,14 @@ class Halo(AstroObject):
     sMIR_scaling : float, optional
         Artificial scaling (multiplicative increase or decrease) of the specific
         halo accretion rate, e.g. to explore increased accretion (default 1.)
+    sMIR_scaling_basefactor : float, optional
+        Base factor that is used by the function referenced in sMIR_scaling_updater
+    sMIR_scaling_updater : function, optional
+        Function used to update the sMIR_scaling at every time step in the evolution.
+        If sMIR_scaling_updater = None, no updating will be performed.
+        If sMIR_scaling_updater is a function, it will be called, with only the
+        current instance of the halo as an argument, from which all other information
+        like redshift etc. needs to be derived (default None)
     z : float, optional
         The current redshift of the system (default None)
     zstart : float, optional
@@ -479,6 +487,8 @@ class Halo(AstroObject):
                  name: str = "Test_Halo",
                  sMIR: float = None,
                  sMIR_scaling = 1.,
+                 sMIR_scaling_basefactor = 1.,
+                 sMIR_scaling_updater = None,
                  z: float = None
                  ):
         self.env = env
@@ -498,6 +508,8 @@ class Halo(AstroObject):
         self.previous = None
         self.sMIR = sMIR
         self.sMIR_scaling = sMIR_scaling
+        self.sMIR_scaling_basefactor = sMIR_scaling_basefactor
+        self.sMIR_scaling_updater = sMIR_scaling_updater
         self.z = env.z if z is None else z
 
         # re-set sMIR and MIR: don't want to set them properly earlier b/c order of attr. wouldn't be alphabetic
@@ -756,6 +768,26 @@ class Halo(AstroObject):
         z = self.z if z is None else z
 
         return sMIR_scaling * 0.027 * (mtot / 10 ** 12) ** (0.15) * (1 + z + 0.1 * ((1 + z) ** (-1.25))) ** 2.5
+
+
+    # sMIR_scaling
+    def update_sMIR_scaling(self, *args, **kwargs) -> float:
+        self.sMIR_scaling = self.compute_sMIR_scaling(*args, **kwargs)
+        return self.sMIR_scaling
+
+    def compute_sMIR_scaling(
+            self,
+            updater_function
+    ) -> float:
+        """
+        Computes the updated sMIR_scaling using the function handed in
+        and the current environment instance
+
+        :param updater_function: function used to compute the new value of
+            sMIR_scaling
+        :return: the new value for sMIR_scaling
+        """
+        return updater_function(self)
 
 
 # ========================================================
