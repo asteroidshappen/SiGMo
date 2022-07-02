@@ -476,6 +476,38 @@ def compute_SFR79_from_SFR(gal_a):
     return SFR79_a
 
 
+# sMIR_scaling updater functions
+def sMIR_scaling_updater_deltaGMS(halo):
+    """
+    Specific function to compute a new value for the sMIR_scaling factor
+    which scales/regulates the Specific Mass Increase Rate with respect to
+    the (standard/commonly expected) value at a specific redshift.
+
+    The (experimental) relation used is `s = b ** log10(SFR_galaxy/SFR_GMS)`,
+    with:
+     * s : the `sMIR_scaling` factor that gets used in the computation
+       of the halo MIR (the return value of this function), and
+     * b : the `sMIR_scaling_basefactor` of the Halo, a value that is
+       expected to be constant over the lifetime of the Halo instance and
+       is only used for these kinds of calculations
+
+    :param halo: the Halo instance for with the new `sMIR_scaling` is being
+    computed
+    :return: new value for the sMIR_scaling factor
+    """
+    # sMIR_scaling = env.sMIR_scaling
+    sMIR_scaling_basefactor = halo.sMIR_scaling_basefactor
+    gal_mstar = halo.galaxies[0].mstar     # HARD-CODED only the FIRST galaxy in list
+    gal_SFR = halo.galaxies[0].SFR     # HARD-CODED only the FIRST galaxy in list
+    z = halo.z
+
+    sfr_gms = GMS_Leslie2020(gal_mstar, z=z, log=False) * 10**9   # conversion from yr⁻¹ to Gyr⁻¹ (like SFR)
+    delta_sfr_log = np.log10(gal_SFR / sfr_gms)
+    sMIR_scaling = sMIR_scaling_basefactor**delta_sfr_log
+
+    return sMIR_scaling
+
+
 # Useful Helper Methods
 
 def calc_bincentres_where_not_nan(value_arr, x_mesh, y_mesh):
