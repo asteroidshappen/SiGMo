@@ -324,6 +324,10 @@ def main():
         sMIR_scaling = np.array([1.] * len(mstar)) * (sMIR_scaling_basefactor**delta_sfr_log)
 
 
+    # set an sMIR_scaling_updater (if desired; if not, set to None)
+    sMIR_scaling_updater = np.array([sgm.sMIR_scaling_updater_deltaGMS] * len(mstar))
+
+
     # SFE = np.array([1.] * len(mstar))
     # SFE = SFR / mgas   # set SFE to one (a.t.m. const) unique value, in harmony with the sSFR relation (through mgas)
     fgal = np.array([0.4] * len(mstar))  # following Lilly+13
@@ -419,6 +423,7 @@ def main():
     IC_halo_mgas = sgm.IC.single_param('mgas', ((BDR / (BDR + 1.)) * mhalo) - (mgas + mstar))
     IC_halo_HLF = sgm.IC.single_param('HLF', HLF)
     IC_halo_sMIR_scaling = sgm.IC.single_param('sMIR_scaling', sMIR_scaling)
+    IC_halo_sMIR_scaling_updater = sgm.IC.single_param('sMIR_scaling_updater', sMIR_scaling_updater)
 
     # Environment IC
     IC_env_zstart = sgm.IC.single_param('zstart', [z])  # can also use 'lookbacktime' (Gyrs) instead of zstart
@@ -432,7 +437,8 @@ def main():
                     IC_halo_mdm +
                     IC_halo_mgas +
                     IC_halo_HLF +
-                    IC_halo_sMIR_scaling)
+                    IC_halo_sMIR_scaling +
+                    IC_halo_sMIR_scaling_updater)
     IC_gal_comb = (IC_gal_mstar +
                    IC_gal_SFR +
                    IC_gal_sSFR +
