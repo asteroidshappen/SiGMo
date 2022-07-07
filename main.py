@@ -315,7 +315,7 @@ def main():
 
 
     # change the overall accretion scaling (aka sMIR_scaling) from the default 1?
-    sMIR_scaling_basefactor = float(input(f"Enter off-GMS sMIR accretion scaling: (Gyr⁻¹ / dex ΔSFR, default: 0)") or 0.)
+    sMIR_scaling_basefactor = float(input(f"Enter off-GMS sMIR accretion scaling: (Gyr⁻¹ / dex ΔSFR, default: 1)") or 1.)
     if sMIR_scaling_basefactor == 1:
         sMIR_scaling = np.array([1.] * len(mstar))
     else:
