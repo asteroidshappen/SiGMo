@@ -743,14 +743,18 @@ class Halo(AstroObject):
 
 
     # sMIR
-    def update_sMIR(self, *args, **kwargs) -> float:
+    def update_sMIR(self, sMIR_scaling_updater = None, *args, **kwargs) -> float:
+        # if necessary: update the sMIR_scaling prior to applying it in compute_sMIR()
+        sMIR_scaling_updater = self.sMIR_scaling_updater if sMIR_scaling_updater is None else sMIR_scaling_updater
+        if sMIR_scaling_updater is not None:
+            self.update_sMIR_scaling(sMIR_scaling_updater)
+
         self.sMIR = self.compute_sMIR(*args, **kwargs)
         return self.sMIR
 
     def compute_sMIR(self,
                      mtot: float = None,
                      sMIR_scaling: float = None,
-                     sMIR_scaling_updater = None,
                      z: float = None
                      ) -> float:
         """
@@ -762,18 +766,12 @@ class Halo(AstroObject):
 
         :param mtot:
         :param sMIR_scaling:
-        :param sMIR_scaling_updater:
         :param z:
         :return:
         """
         mtot = self.mtot if mtot is None else mtot
         sMIR_scaling = self.sMIR_scaling if sMIR_scaling is None else sMIR_scaling
-        sMIR_scaling_updater = self.sMIR_scaling_updater if sMIR_scaling_updater is None else sMIR_scaling_updater
         z = self.z if z is None else z
-
-        # if necessary: update sMIR_scaling prior to applying it
-        if sMIR_scaling_updater is not None:
-            sMIR_scaling = self.update_sMIR_scaling(sMIR_scaling_updater)
 
         return sMIR_scaling * 0.027 * (mtot / 10 ** 12) ** (0.15) * (1 + z + 0.1 * ((1 + z) ** (-1.25))) ** 2.5
 
