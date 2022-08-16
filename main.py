@@ -423,6 +423,7 @@ def main():
     IC_halo_mgas = sgm.IC.single_param('mgas', ((BDR / (BDR + 1.)) * mhalo) - (mgas + mstar))
     IC_halo_HLF = sgm.IC.single_param('HLF', HLF)
     IC_halo_sMIR_scaling = sgm.IC.single_param('sMIR_scaling', sMIR_scaling)
+    IC_halo_sMIR_scaling_basefactor = sgm.IC.single_param('sMIR_scaling_basefactor', np.array([sMIR_scaling_basefactor] * len(mstar)))
     IC_halo_sMIR_scaling_updater = sgm.IC.single_param('sMIR_scaling_updater', sMIR_scaling_updater)
 
     # Environment IC
@@ -438,6 +439,7 @@ def main():
                     IC_halo_mgas +
                     IC_halo_HLF +
                     IC_halo_sMIR_scaling +
+                    IC_halo_sMIR_scaling_basefactor +
                     IC_halo_sMIR_scaling_updater)
     IC_gal_comb = (IC_gal_mstar +
                    IC_gal_SFR +
