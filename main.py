@@ -301,13 +301,14 @@ def main():
         mstar = 10**mstar_log
         SFR = 10**(sfr_log + SFR_offset) * 10**9   # CONVERSION of 'per yr' (obs) to 'per Gyr' (sims)
         sSFR = SFR / mstar
-        # mgas = sgm.calculate_mgas_mstar_from_sSFR_Tacconi2020(sSFR=sSFR,
-        #                                                       mstar=mstar,
-        #                                                       z=z,
-        #                                                       log=False,
-        #                                                       withscatter=False) * mstar
-        SFE = np.array([1.5] * len(mstar))
-        mgas = SFR / SFE
+        mgas = sgm.calculate_mgas_mstar_from_sSFR_Tacconi2020(sSFR=sSFR,
+                                                              mstar=mstar,
+                                                              z=z,
+                                                              log=False,
+                                                              withscatter=False) * mstar
+        SFE = SFR / mgas
+        # SFE = np.array([1.5] * len(mstar))
+        # mgas = SFR / SFE
     elif isinstance(use_as_ICs, str):
         raise ValueError
     else:
@@ -589,27 +590,49 @@ def main():
         # )
 
 
-        # THIS (again) IS JUST BACKWARDS INTEGRATION FROM z=0, BUT FARTHER and with ΔSFR dependent sMIR scaling
+        # # THIS (again) IS JUST BACKWARDS INTEGRATION FROM z=0, BUT FARTHER and with ΔSFR dependent sMIR scaling
+        #
+        # # create BACKWARD integrator
+        # Integrator = sgm.FTI(
+        #     env=env,
+        #     evolve_method='evolve',
+        #     dt=-1.e-3,
+        #     # dt=-1.e-4,
+        #     t_start=env.lookbacktime,
+        #     t_end=2
+        # )
+        #
+        # # run the BACKWARD integrator
+        # print("Starting integration")
+        # Integrator.integrate(
+        #     wtd=1,
+        #     # wtd=10,
+        #     outdir=out_dir / f"0_backward_2Gyr_dt1e-3_sMIR_scaling_basefactor{sMIR_scaling_basefactor}",
+        #     # outdir=out_dir / "0_backward_2Gyr_dt1e-4_wtd10",
+        #     single_snapshots=False
+        # )
+
+
+
+        # THIS (again) IS FORWARDS INTEGRATION FROM z SET EARLIER, RUNNING UNTIL z=0
 
         # create BACKWARD integrator
         Integrator = sgm.FTI(
             env=env,
             evolve_method='evolve',
-            dt=-1.e-3,
-            # dt=-1.e-4,
+            dt=1.e-3,
             t_start=env.lookbacktime,
-            t_end=2
+            t_end=0.
         )
 
         # run the BACKWARD integrator
         print("Starting integration")
         Integrator.integrate(
             wtd=1,
-            # wtd=10,
-            outdir=out_dir / f"0_backward_2Gyr_dt1e-3_sMIR_scaling_basefactor{sMIR_scaling_basefactor}",
-            # outdir=out_dir / "0_backward_2Gyr_dt1e-4_wtd10",
+            outdir=out_dir / f"0_forward_from_z{z}_to_z0_dt1e-3_SFRoffset{SFR_offset}_sMIR_scaling_basefactor{sMIR_scaling_basefactor}",
             single_snapshots=False
         )
+
 
 
     elif (run_sim == "n".casefold()) or (run_sim == "no".casefold()):
