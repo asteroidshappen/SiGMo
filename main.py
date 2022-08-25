@@ -265,7 +265,7 @@ def main():
 
 
     # use data from SDSS or xCG as initial conditions?
-    use_as_ICs = input(f"Specify which data to base the galaxies on: (SDSS/xCG/GMS)")
+    use_as_ICs = input(f"Specify which data to base the galaxies on: (SDSS/xCG/GMS/GMS_GAUSS)")
 
     # intial values for Galaxy properties
     if use_as_ICs.casefold() == "SDSS".casefold():  # SDSS
@@ -309,6 +309,69 @@ def main():
         SFE = SFR / mgas
         # SFE = np.array([1.5] * len(mstar))
         # mgas = SFR / SFE
+    elif use_as_ICs.casefold() == "GMS_GAUSS".casefold():
+        # input
+        try:
+            mstar_min = float(input(f"Lowest stellar mass of the galaxies: (log(mstar/M☉), default: 6)") or 6.)
+            mstar_max = float(input(f"Highest stellar mass of the galaxies: (log(mstar/M☉), default: 10)") or 10.)
+            n_gal = int(input(f"Number of galaxies between "
+                                f"log(mstar/M☉) = {mstar_min} to {mstar_max}: (default: 100)") or 100)
+            z = float(input(f"Redshift of the GMS: (default: 2)") or 2.)
+            SFR_offset = float(input(f"Offset ΔSFR of galaxies from the GMS: (log(ΔSFR/M☉ yr⁻¹), default: 0)") or 0.)
+            sfr_sigma = float(input(f"Standard deviation of the Gaussian SFR distribution: (dex, default: 0.1)") or 0.1)
+        except ValueError:
+            print("Some input value(s) could not be converted to numeric value(s)")
+            mstar_min, mstar_max, n_gal, z, SFR_offset, sfr_sigma = tuple([None] * 6)  # will crash the code in the next lines
+
+        # calc IC values
+
+        # initiate rng
+        rng = np.random.default_rng(12345)
+
+        # two random dist
+        mstar_log = rng.uniform(low=mstar_min,
+                                high=mstar_max,
+                                size=n_gal)
+        sfr_normal_log = rng.normal(loc=SFR_offset,
+                             scale=sfr_sigma,
+                             size=n_gal)
+
+        # calc GMS and add it to the SFR normal dist
+        gms_sfr_log = sgm.GMS_Leslie2020(mstar_log, z=z, log=True)
+        sfr_log = sfr_normal_log + gms_sfr_log
+
+        # convert from log and calc further data
+        mstar = 10**mstar_log
+        SFR = 10**sfr_log * 10**9   # CONVERSION of 'per yr' (obs) to 'per Gyr' (sims)
+        sSFR = SFR / mstar
+        mgas = sgm.calculate_mgas_mstar_from_sSFR_Tacconi2020(sSFR=sSFR,
+                                                              mstar=mstar,
+                                                              z=z,
+                                                              log=False,
+                                                              withscatter=False) * mstar
+        SFE = SFR / mgas
+
+        # control plot?
+        plotting = True
+        if plotting:
+            fig_gauss, ax_gauss = plt.subplots(1, 2, figsize=(12, 5))
+
+            ax_gauss[0].axhline(SFR_offset, ls='--', color='xkcd:green', zorder=-1, label=f'In: mean={SFR_offset:.3f}, std={sfr_sigma:.3f}')
+            ax_gauss[0].scatter(mstar_log, sfr_normal_log, label=f'Out: mean={np.mean(sfr_normal_log):.3f}, std={np.std(sfr_normal_log):.3f}, N={n_gal}')
+
+            _mstar_lin = np.linspace(mstar_min, mstar_max, 1000)
+            ax_gauss[1].plot(_mstar_lin, sgm.GMS_Leslie2020(mstar=_mstar_lin, z=z, log=True), ls='--', color='xkcd:green', zorder=-1, label=f'Leslie+20 GMS at z={z}')
+            ax_gauss[1].scatter(mstar_log, sfr_log, label=f'Transformed to GMS')
+
+            for _ax in ax_gauss:
+                _ax.set_xlabel(r'log $M_\mathrm{star}$ [$M_\odot$]')
+                _ax.set_ylabel(r'log $SFR$ [$M_\odot$ yr$^{-1}$]')
+                _ax.tick_params(axis='both', which='both', direction='in', bottom=True, top=True, left=True, right=True)
+                _ax.legend()
+
+            fig_gauss.savefig(plot_dir / f'Generate_Distribution_around_GMS_{datetime.now().strftime("%Y.%m.%d-%H.%M.%S")}.png', dpi=300)
+
+
     elif isinstance(use_as_ICs, str):
         raise ValueError
     else:
