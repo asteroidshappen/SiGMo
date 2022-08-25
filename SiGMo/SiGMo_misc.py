@@ -343,13 +343,23 @@ def calculate_mgas_mstar_from_sSFR_Saintonge2022(sSFR, log_values=False, withsca
         t1 = np.array([-0.01, 0., +0.01])
         t2 = np.array([-0.12, 0., +0.12])
 
-    res = []
-    for _sSFR in sSFR:
-        _tmp = (0.75 + t1) * _sSFR + (6.24 + t2)
-        if not log_values:
-            _tmp = 10**_tmp
-        _tmp = tuple(_tmp) if len(tuple(_tmp)) > 1 else _tmp[0]
-        res.append(_tmp)
+
+    # # old, loop-based code block that struggles with more than 1-dim arrays
+    # res = []
+    # for _sSFR in sSFR:
+    #     _tmp = (0.75 + t1) * _sSFR + (6.24 + t2)
+    #     if not log_values:
+    #         _tmp = 10**_tmp
+    #     _tmp = tuple(_tmp) if len(tuple(_tmp)) > 1 else _tmp[0]
+    #     res.append(_tmp)
+
+    # new, shiny vectorised block of code for n-dim arrays
+    res = np.full_like(sSFR, np.nan)
+    res = (0.75 + t1) * sSFR + (6.24 + t2)
+    if not log_values:
+        res = 10**res
+    res = res if len(tuple(res)) > 1 else res[0]
+
 
     if len(res) == 1:
         res = res[0]
