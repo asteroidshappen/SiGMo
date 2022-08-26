@@ -210,24 +210,6 @@ class AstroObject(ABC):
             snp.save_to_disk(outdir / snp.autoname_with_index(index, n_steps))
         return
 
-    # # Old functioning make_snapshot() method, but super-inefficient because it makes deepcopy of everything everytime
-    # def make_snapshot(self) -> 'Snapshot':
-    #     """Returns the current values of all major attributes as dict,
-    #     replaces instances of the subclasses of AstroObject by their name attribute"""
-    #     _tmp_out = copy.deepcopy(dict(vars(self)))
-    #
-    #     # replace instances and lists of instances of AstroObject subclasses with their 'name' attribute
-    #     # use-case: env, halos, galaxies will usually contain those, but including them in a snapshot results in
-    #     # circular or at least references (e.g. env contains galaxy, that has its env, that contains the galaxy, ad inf)
-    #     for attr, value in _tmp_out.items():
-    #         if isinstance(value, AstroObject):  # straight-up instance of a AstroObject subclass
-    #             _tmp_out[attr] = value.name
-    #         elif isinstance(value, list):  # list of instances of AstroObject subclass(es)
-    #             for i, value_i in enumerate(value):
-    #                 if isinstance(value_i, AstroObject):
-    #                     _tmp_out[attr][i] = value_i.name
-    #
-    #     return SiGMo.Snapshot(_tmp_out)
 
     def __repr__(self) -> str:
         """Return representation of respective AstroObject. Uses self.make_snapshot() to get values, which have
