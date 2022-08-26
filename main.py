@@ -677,13 +677,42 @@ def main():
 
 
 
+        # # THIS (again) IS FORWARDS INTEGRATION FROM z SET EARLIER, RUNNING UNTIL z=0
+        #
+        # # create BACKWARD integrator
+        # Integrator = sgm.FTI(
+        #     env=env,
+        #     evolve_method='evolve',
+        #     dt=1.e-3,
+        #     t_start=env.lookbacktime,
+        #     t_end=0.
+        # )
+        #
+        # # run the BACKWARD integrator
+        # print("Starting integration")
+        # Integrator.integrate(
+        #     wtd=1,
+        #     outdir=out_dir / f"0_forward_from_z{z}_to_z0_dt1e-3_SFRoffset{SFR_offset}_sMIR_scaling_basefactor{sMIR_scaling_basefactor}",
+        #     single_snapshots=False
+        # )
+
+
         # THIS (again) IS FORWARDS INTEGRATION FROM z SET EARLIER, RUNNING UNTIL z=0
+        # 10-TIMES HIGHER TIME RESOLUTION (but same number of outputs)
+
+        time_res = 1.e-4
+
+        # check that time res is single digit precision
+        time_res_str = str(f'{time_res:.0e}')
+        time_res_float_from_str = float(time_res_str)
+        assert np.isclose(time_res, time_res_float_from_str, atol=time_res/100)
+
 
         # create BACKWARD integrator
         Integrator = sgm.FTI(
             env=env,
             evolve_method='evolve',
-            dt=1.e-3,
+            dt=time_res,
             t_start=env.lookbacktime,
             t_end=0.
         )
@@ -691,8 +720,8 @@ def main():
         # run the BACKWARD integrator
         print("Starting integration")
         Integrator.integrate(
-            wtd=1,
-            outdir=out_dir / f"0_forward_from_z{z}_to_z0_dt1e-3_SFRoffset{SFR_offset}_sMIR_scaling_basefactor{sMIR_scaling_basefactor}",
+            wtd=10,
+            outdir=out_dir / f"0_forward_from_z{z}_to_z0_dt{time_res:.0e}_SFRoffset{SFR_offset}_sMIR_scaling_basefactor{sMIR_scaling_basefactor}",
             single_snapshots=False
         )
 
