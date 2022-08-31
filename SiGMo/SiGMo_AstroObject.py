@@ -327,8 +327,10 @@ class Environment(AstroObject):
                ):
         """Evolve Environment and all halos/galaxies either intuitively or per Lilly+13, Eq.12a-14a, acc. to 'mode'"""
         # store snapshot of previous state before anything gets changed
-        self.previous = None
-        self.previous = self.make_snapshot()
+
+        # # THIS IS ONLY NEEDED FOR THE AFTERWARD CALCULATION OF FRACTIONS (similar to Lilly) – commented out
+        # self.previous = None
+        # self.previous = self.make_snapshot()
 
         # make the time step in lookbacktime, then convert to z as well
         self.lookbacktime -= timestep
@@ -526,9 +528,11 @@ class Halo(AstroObject):
                timestep: float = 1.e-3
                ):
         """Evolve Halo and all galaxies either intuitively or per Lilly+13, Eq.12a-14a, acc. to 'mode'"""
-        # store snapshot of previous state before anything gets changed
-        self.previous = None
-        self.previous = self.make_snapshot()
+
+        # # THIS IS ONLY NEEDED FOR THE AFTERWARD CALCULATION OF FRACTIONS (similar to Lilly) – commented out
+        # # store snapshot of previous state before anything gets changed
+        # self.previous = None
+        # self.previous = self.make_snapshot()
 
         # take lookbacktime and z (redshift) from Environment the Halo belongs to
         self.lookbacktime = self.env.lookbacktime
@@ -1116,9 +1120,11 @@ class Galaxy(AstroObject):
                          ) -> 'Snapshot':
         """Evolves the galaxy by one timestep according to Lilly+13 Eq.12a,13a,14a,
         ideal regulator"""
-        # store snapshot of previous state before anything gets changed
-        self.previous = None
-        self.previous = self.make_snapshot()
+
+        # # THIS IS ONLY NEEDED FOR THE AFTERWARD CALCULATION OF FRACTIONS (similar to Lilly) – commented out
+        # # store snapshot of previous state before anything gets changed
+        # self.previous = None
+        # self.previous = self.make_snapshot()
 
         # update the lookbacktime and redshift (z) of the galaxy to the halo's values
         self.lookbacktime = self.halo.lookbacktime
@@ -1160,9 +1166,11 @@ class Galaxy(AstroObject):
                          ) -> 'Snapshot':
         """Evolves the galaxy by one timestep intuitively, *without* using
         sSFR(mstar, z) as time-dependent input (like Lilly+13 do)"""
-        # store snapshot of previous state before anything gets changed
-        self.previous = None
-        self.previous = self.make_snapshot()
+
+        # # THIS IS ONLY NEEDED FOR THE AFTERWARD CALCULATION OF FRACTIONS (similar to Lilly) – commented out
+        # # store snapshot of previous state before anything gets changed
+        # self.previous = None
+        # self.previous = self.make_snapshot()
 
         # update the lookbacktime and redshift (z) of the galaxy to the halo's values
         self.lookbacktime = self.halo.lookbacktime
@@ -1189,10 +1197,11 @@ class Galaxy(AstroObject):
         # update some derived quantities, here sSFR (and through it rsSFR)
         self.update_sSFR(mode='from SFR')
 
-        # (compute and) update increases/decreases as fractions of gross accreted mass onto galaxy
-        self.update_fstar(mode="afterwards")
-        self.update_fout(mode="afterwards")
-        self.update_fgas(mode="afterwards")
+        # # THIS IS THE ONLY PART THAT NEEDS ALL THE ADDITIONAL SNAPSHOTS – commented out
+        # # (compute and) update increases/decreases as fractions of gross accreted mass onto galaxy
+        # self.update_fstar(mode="afterwards")
+        # self.update_fout(mode="afterwards")
+        # self.update_fgas(mode="afterwards")
 
         return self.make_snapshot()
 
