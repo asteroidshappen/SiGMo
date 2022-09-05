@@ -754,7 +754,7 @@ def main():
         print("Starting integration")
         Integrator.integrate(
             wtd=wtd,
-            outdir=out_dir / f"gms_gauss_from_z{z}_to_z0_dt{time_res:.0e}_wtd{wtd}_sigma{sfr_sigma:.3f}_sMIR_scaling_basefactor{sMIR_scaling_basefactor}",
+            outdir=out_dir / f"{use_as_ICs}_from_z{z}_to_z0_dt{time_res:.0e}_wtd{wtd}_sigma{sfr_sigma:.3f}_sMIR_scaling_basefactor{sMIR_scaling_basefactor}",
             single_snapshots=False
         )
 
