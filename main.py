@@ -265,7 +265,7 @@ def main():
 
 
     # use data from SDSS or xCG as initial conditions?
-    use_as_ICs = input(f"Specify which data to base the galaxies on: (SDSS/xCG/GMS/GMS_GAUSS)")
+    use_as_ICs = str(input(f"Specify which data to base the galaxies on: (SDSS/xCG/GMS/GMS_GAUSS, default: GMS_GAUSS)") or "gms_gauss")
 
     # intial values for Galaxy properties
     if use_as_ICs.casefold() == "SDSS".casefold():  # SDSS
@@ -317,6 +317,9 @@ def main():
             n_gal = int(input(f"Number of galaxies between "
                                 f"log(mstar/M☉) = {mstar_min} to {mstar_max}: (default: 100)") or 100)
             z = float(input(f"Redshift of the GMS: (default: 2)") or 2.)
+            t_length = float(input(f"Run time of the simulation: (Gyr, default: all until z=0)") or 0.)
+            time_res = float(input(f"Time step resolution: (Gyr, default: 1.e-3)") or 1.e-3)
+            wtd = int(input(f"Write output to disk every n-th time step: (default: 1)") or 1)
             SFR_offset = float(input(f"Offset ΔSFR of galaxies from the GMS: (log(ΔSFR/M☉ yr⁻¹), default: 0)") or 0.)
             sfr_sigma = float(input(f"Standard deviation of the Gaussian SFR distribution: (dex, default: 0.3)") or 0.3)
         except ValueError:
@@ -732,7 +735,7 @@ def main():
         # NORMAL TIME RESOLUTION (but same number of outputs)
         # HIGHER SIGMA (0.3) from input at runtime
 
-        time_res = 1.e-3
+        # time_res = 1.e-3
 
         # check that time res is single digit precision
         time_res_str = str(f'{time_res:.0e}')
@@ -741,16 +744,18 @@ def main():
 
 
         # create BACKWARD integrator
+        t_end = env.lookbacktime - t_length if t_length > 0. else 0.
+
         Integrator = sgm.FTI(
             env=env,
             evolve_method='evolve',
             dt=time_res,
             t_start=env.lookbacktime,
-            t_end=0.
+            t_end=t_end
         )
 
         # run the BACKWARD integrator
-        wtd = 1
+        # wtd = 1
         print("Starting integration")
         Integrator.integrate(
             wtd=wtd,
