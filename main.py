@@ -392,7 +392,8 @@ def main():
 
 
     # set an sMIR_scaling_updater (if desired; if not, set to None)
-    sMIR_scaling_updater = np.array([sgm.sMIR_scaling_updater_deltaGMS] * len(mstar))
+    # sMIR_scaling_updater = np.array([sgm.sMIR_scaling_updater_deltaGMS] * len(mstar))
+    sMIR_scaling_updater = np.array([None] * len(mstar))
 
 
     # SFE = np.array([1.] * len(mstar))
