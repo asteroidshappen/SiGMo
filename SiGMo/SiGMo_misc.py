@@ -4,7 +4,7 @@ from astropy.table import Table
 from astropy.cosmology import Planck18 as cosmo
 
 import warnings
-import tqdm
+from tqdm import tqdm
 
 
 # Galaxy Main Sequence WITH flattening
@@ -343,13 +343,23 @@ def calculate_mgas_mstar_from_sSFR_Saintonge2022(sSFR, log_values=False, withsca
         t1 = np.array([-0.01, 0., +0.01])
         t2 = np.array([-0.12, 0., +0.12])
 
-    res = []
-    for _sSFR in sSFR:
-        _tmp = (0.75 + t1) * _sSFR + (6.24 + t2)
-        if not log_values:
-            _tmp = 10**_tmp
-        _tmp = tuple(_tmp) if len(tuple(_tmp)) > 1 else _tmp[0]
-        res.append(_tmp)
+
+    # # old, loop-based code block that struggles with more than 1-dim arrays
+    # res = []
+    # for _sSFR in sSFR:
+    #     _tmp = (0.75 + t1) * _sSFR + (6.24 + t2)
+    #     if not log_values:
+    #         _tmp = 10**_tmp
+    #     _tmp = tuple(_tmp) if len(tuple(_tmp)) > 1 else _tmp[0]
+    #     res.append(_tmp)
+
+    # new, shiny vectorised block of code for n-dim arrays
+    res = np.full_like(sSFR, np.nan)
+    res = (0.75 + t1) * sSFR + (6.24 + t2)
+    if not log_values:
+        res = 10**res
+    res = res if len(tuple(res)) > 1 else res[0]
+
 
     if len(res) == 1:
         res = res[0]
@@ -432,47 +442,6 @@ def calculate_mgas_mstar_from_sSFR_Tacconi2020(sSFR, mstar, z, log=True, withsca
     return log_res if log else 10**log_res
 
 
-# Useful Helper Methods
-
-def calc_bincentres_where_not_nan(value_arr, x_mesh, y_mesh):
-    """
-    Calculates the bin centres from a 2-d array of values (value_arr) und two 2-d mesh arrays with corresponding bin
-    edges, for all 2-d bins where value_arr is not np.nan. Example: value_arr.shape = (10, 10) , then x_mesh.shape =
-    (11, 11) and y_mesh.shape = (11, 11) , as produced by np.meshgrid().
-
-    :param value_arr: 2-d array with values, e.g. bin counts. Non-relevant bins should be np.nan, so that their bin
-    centres are not calculated here and not included in the return array
-    :param x_mesh: 2-d array as produced by np.meshgrid() based on the bin edges of value_arr in x direction
-    :param y_mesh: 2-d array as produced by np.meshgrid() based on the bin edges of value_arr in y direction
-    :return: 2-d array with shape=(n,2), n being the entries in value_arr that are not np.nan, and the second dimension
-    having the x and y coordinates of the bin centre
-    """
-    bincentres = []
-    for (value,
-         x_lower, x_upper,
-         y_lower, y_upper) in zip(value_arr.flat,
-                                  x_mesh[:-1, :-1].flat, x_mesh[1:, 1:].flat,
-                                  y_mesh[:-1, 1:].flat, y_mesh[1:, :-1].flat):
-        if not np.isnan(value):
-            bincentres.append([0.5 * (x_lower + x_upper), 0.5 * (y_lower + y_upper)])
-
-    return np.array(bincentres)
-
-
-def find_nearest_index(arr, val):
-    """
-    Determines which index in arr (array) contains the value closest to val (value). If arr contains several elements of
-    the same value who all would fulfil that condition equally, the first element in order of traversion is returned.
-
-    :param arr: an array in which to search for the nearest match
-    :param val: the value for which the closest match is searched
-    :return: index in arr pointing to the (first) closest element to val
-    """
-    arr = np.asarray(arr)
-    nearest_i = (np.abs(arr - val)).argmin()
-    return nearest_i
-
-
 # SFR79 Star Formation Rate Change Parameter
 
 def compute_SFR79_from_SFR(gal_a):
@@ -515,6 +484,79 @@ def compute_SFR79_from_SFR(gal_a):
         # print(SFR79_grid_fl[i, 2])
 
     return SFR79_a
+
+
+# sMIR_scaling updater functions
+def sMIR_scaling_updater_deltaGMS(halo):
+    """
+    Specific function to compute a new value for the sMIR_scaling factor
+    which scales/regulates the Specific Mass Increase Rate with respect to
+    the (standard/commonly expected) value at a specific redshift.
+
+    The (experimental) relation used is `s = b ** log10(SFR_galaxy/SFR_GMS)`,
+    with:
+     * s : the `sMIR_scaling` factor that gets used in the computation
+       of the halo MIR (the return value of this function), and
+     * b : the `sMIR_scaling_basefactor` of the Halo, a value that is
+       expected to be constant over the lifetime of the Halo instance and
+       is only used for these kinds of calculations
+
+    :param halo: the Halo instance for with the new `sMIR_scaling` is being
+    computed
+    :return: new value for the sMIR_scaling factor
+    """
+    # sMIR_scaling = env.sMIR_scaling
+    sMIR_scaling_basefactor = halo.sMIR_scaling_basefactor
+    gal_mstar = halo.galaxies[0].mstar     # HARD-CODED only the FIRST galaxy in list
+    gal_SFR = halo.galaxies[0].SFR     # HARD-CODED only the FIRST galaxy in list
+    z = halo.z
+
+    sfr_gms = GMS_Leslie2020(gal_mstar, z=z, log=False) * 10**9   # conversion from yr⁻¹ to Gyr⁻¹ (like SFR)
+    delta_sfr_log = np.log10(gal_SFR / sfr_gms)
+    sMIR_scaling = sMIR_scaling_basefactor**delta_sfr_log
+
+    return sMIR_scaling
+
+
+# Useful Helper Methods
+
+def calc_bincentres_where_not_nan(value_arr, x_mesh, y_mesh):
+    """
+    Calculates the bin centres from a 2-d array of values (value_arr) und two 2-d mesh arrays with corresponding bin
+    edges, for all 2-d bins where value_arr is not np.nan. Example: value_arr.shape = (10, 10) , then x_mesh.shape =
+    (11, 11) and y_mesh.shape = (11, 11) , as produced by np.meshgrid().
+
+    :param value_arr: 2-d array with values, e.g. bin counts. Non-relevant bins should be np.nan, so that their bin
+    centres are not calculated here and not included in the return array
+    :param x_mesh: 2-d array as produced by np.meshgrid() based on the bin edges of value_arr in x direction
+    :param y_mesh: 2-d array as produced by np.meshgrid() based on the bin edges of value_arr in y direction
+    :return: 2-d array with shape=(n,2), n being the entries in value_arr that are not np.nan, and the second dimension
+    having the x and y coordinates of the bin centre
+    """
+    bincentres = []
+    for (value,
+         x_lower, x_upper,
+         y_lower, y_upper) in zip(value_arr.flat,
+                                  x_mesh[:-1, :-1].flat, x_mesh[1:, 1:].flat,
+                                  y_mesh[:-1, 1:].flat, y_mesh[1:, :-1].flat):
+        if not np.isnan(value):
+            bincentres.append([0.5 * (x_lower + x_upper), 0.5 * (y_lower + y_upper)])
+
+    return np.array(bincentres)
+
+
+def find_nearest_index(arr, val):
+    """
+    Determines which index in arr (array) contains the value closest to val (value). If arr contains several elements of
+    the same value who all would fulfil that condition equally, the first element in order of traversion is returned.
+
+    :param arr: an array in which to search for the nearest match
+    :param val: the value for which the closest match is searched
+    :return: index in arr pointing to the (first) closest element to val
+    """
+    arr = np.asarray(arr)
+    nearest_i = (np.abs(arr - val)).argmin()
+    return nearest_i
 
 
 def join_paths(path1, path2):

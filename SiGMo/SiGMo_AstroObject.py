@@ -210,24 +210,6 @@ class AstroObject(ABC):
             snp.save_to_disk(outdir / snp.autoname_with_index(index, n_steps))
         return
 
-    # # Old functioning make_snapshot() method, but super-inefficient because it makes deepcopy of everything everytime
-    # def make_snapshot(self) -> 'Snapshot':
-    #     """Returns the current values of all major attributes as dict,
-    #     replaces instances of the subclasses of AstroObject by their name attribute"""
-    #     _tmp_out = copy.deepcopy(dict(vars(self)))
-    #
-    #     # replace instances and lists of instances of AstroObject subclasses with their 'name' attribute
-    #     # use-case: env, halos, galaxies will usually contain those, but including them in a snapshot results in
-    #     # circular or at least references (e.g. env contains galaxy, that has its env, that contains the galaxy, ad inf)
-    #     for attr, value in _tmp_out.items():
-    #         if isinstance(value, AstroObject):  # straight-up instance of a AstroObject subclass
-    #             _tmp_out[attr] = value.name
-    #         elif isinstance(value, list):  # list of instances of AstroObject subclass(es)
-    #             for i, value_i in enumerate(value):
-    #                 if isinstance(value_i, AstroObject):
-    #                     _tmp_out[attr][i] = value_i.name
-    #
-    #     return SiGMo.Snapshot(_tmp_out)
 
     def __repr__(self) -> str:
         """Return representation of respective AstroObject. Uses self.make_snapshot() to get values, which have
@@ -345,8 +327,10 @@ class Environment(AstroObject):
                ):
         """Evolve Environment and all halos/galaxies either intuitively or per Lilly+13, Eq.12a-14a, acc. to 'mode'"""
         # store snapshot of previous state before anything gets changed
-        self.previous = None
-        self.previous = self.make_snapshot()
+
+        # # THIS IS ONLY NEEDED FOR THE AFTERWARD CALCULATION OF FRACTIONS (similar to Lilly) – commented out
+        # self.previous = None
+        # self.previous = self.make_snapshot()
 
         # make the time step in lookbacktime, then convert to z as well
         self.lookbacktime -= timestep
@@ -444,6 +428,17 @@ class Halo(AstroObject):
         The name of the galaxy (default 'Test_Env')
     sMIR : float, optional
         The specific mass increase rate (accretion) of the DM halo (default 0.)
+    sMIR_scaling : float, optional
+        Artificial scaling (multiplicative increase or decrease) of the specific
+        halo accretion rate, e.g. to explore increased accretion (default 1.)
+    sMIR_scaling_basefactor : float, optional
+        Base factor that is used by the function referenced in sMIR_scaling_updater
+    sMIR_scaling_updater : function, optional
+        Function used to update the sMIR_scaling at every time step in the evolution.
+        If sMIR_scaling_updater = None, no updating will be performed.
+        If sMIR_scaling_updater is a function, it will be called, with only the
+        current instance of the halo as an argument, from which all other information
+        like redshift etc. needs to be derived (default None)
     z : float, optional
         The current redshift of the system (default None)
     zstart : float, optional
@@ -475,6 +470,9 @@ class Halo(AstroObject):
                  mtot: float = None,
                  name: str = "Test_Halo",
                  sMIR: float = None,
+                 sMIR_scaling = 1.,
+                 sMIR_scaling_basefactor = 1.,
+                 sMIR_scaling_updater = None,
                  z: float = None
                  ):
         self.env = env
@@ -493,6 +491,9 @@ class Halo(AstroObject):
         self.name = name
         self.previous = None
         self.sMIR = sMIR
+        self.sMIR_scaling = sMIR_scaling
+        self.sMIR_scaling_basefactor = sMIR_scaling_basefactor
+        self.sMIR_scaling_updater = sMIR_scaling_updater
         self.z = env.z if z is None else z
 
         # re-set sMIR and MIR: don't want to set them properly earlier b/c order of attr. wouldn't be alphabetic
@@ -527,9 +528,11 @@ class Halo(AstroObject):
                timestep: float = 1.e-3
                ):
         """Evolve Halo and all galaxies either intuitively or per Lilly+13, Eq.12a-14a, acc. to 'mode'"""
-        # store snapshot of previous state before anything gets changed
-        self.previous = None
-        self.previous = self.make_snapshot()
+
+        # # THIS IS ONLY NEEDED FOR THE AFTERWARD CALCULATION OF FRACTIONS (similar to Lilly) – commented out
+        # # store snapshot of previous state before anything gets changed
+        # self.previous = None
+        # self.previous = self.make_snapshot()
 
         # take lookbacktime and z (redshift) from Environment the Halo belongs to
         self.lookbacktime = self.env.lookbacktime
@@ -726,20 +729,57 @@ class Halo(AstroObject):
 
 
     # sMIR
-    def update_sMIR(self, *args, **kwargs) -> float:
+    def update_sMIR(self, sMIR_scaling_updater = None, *args, **kwargs) -> float:
+        # if necessary: update the sMIR_scaling prior to applying it in compute_sMIR()
+        sMIR_scaling_updater = self.sMIR_scaling_updater if sMIR_scaling_updater is None else sMIR_scaling_updater
+        if sMIR_scaling_updater is not None:
+            self.update_sMIR_scaling(sMIR_scaling_updater)
+
         self.sMIR = self.compute_sMIR(*args, **kwargs)
         return self.sMIR
 
     def compute_sMIR(self,
                      mtot: float = None,
+                     sMIR_scaling: float = None,
                      z: float = None
                      ) -> float:
-        """Computes the specific Mass Increase Rate of the DM halo
-        accoding to Lilly et al. 2013, Eq. (3), more precise version"""
+        """
+        Computes the specific Mass Increase Rate of the DM halo
+        accoding to Lilly et al. 2013, Eq. (3), more precise version.
+        Modified to include an optional scaling factor to regulate
+        accretion rate on the halo in total, as well as an optional
+        update to this scaling factor
+
+        :param mtot:
+        :param sMIR_scaling:
+        :param z:
+        :return:
+        """
         mtot = self.mtot if mtot is None else mtot
+        sMIR_scaling = self.sMIR_scaling if sMIR_scaling is None else sMIR_scaling
         z = self.z if z is None else z
 
-        return 0.027 * (mtot / 10 ** 12) ** (0.15) * (1 + z + 0.1 * ((1 + z) ** (-1.25))) ** 2.5
+        return sMIR_scaling * 0.027 * (mtot / 10 ** 12) ** (0.15) * (1 + z + 0.1 * ((1 + z) ** (-1.25))) ** 2.5
+
+
+    # sMIR_scaling
+    def update_sMIR_scaling(self, *args, **kwargs) -> float:
+        self.sMIR_scaling = self.compute_sMIR_scaling(*args, **kwargs)
+        return self.sMIR_scaling
+
+    def compute_sMIR_scaling(
+            self,
+            updater_function
+    ) -> float:
+        """
+        Computes the updated sMIR_scaling using the function handed in
+        and the current environment instance
+
+        :param updater_function: function used to compute the new value of
+            sMIR_scaling
+        :return: the new value for sMIR_scaling
+        """
+        return updater_function(self)
 
 
 # ========================================================
@@ -1080,9 +1120,11 @@ class Galaxy(AstroObject):
                          ) -> 'Snapshot':
         """Evolves the galaxy by one timestep according to Lilly+13 Eq.12a,13a,14a,
         ideal regulator"""
-        # store snapshot of previous state before anything gets changed
-        self.previous = None
-        self.previous = self.make_snapshot()
+
+        # # THIS IS ONLY NEEDED FOR THE AFTERWARD CALCULATION OF FRACTIONS (similar to Lilly) – commented out
+        # # store snapshot of previous state before anything gets changed
+        # self.previous = None
+        # self.previous = self.make_snapshot()
 
         # update the lookbacktime and redshift (z) of the galaxy to the halo's values
         self.lookbacktime = self.halo.lookbacktime
@@ -1124,9 +1166,11 @@ class Galaxy(AstroObject):
                          ) -> 'Snapshot':
         """Evolves the galaxy by one timestep intuitively, *without* using
         sSFR(mstar, z) as time-dependent input (like Lilly+13 do)"""
-        # store snapshot of previous state before anything gets changed
-        self.previous = None
-        self.previous = self.make_snapshot()
+
+        # # THIS IS ONLY NEEDED FOR THE AFTERWARD CALCULATION OF FRACTIONS (similar to Lilly) – commented out
+        # # store snapshot of previous state before anything gets changed
+        # self.previous = None
+        # self.previous = self.make_snapshot()
 
         # update the lookbacktime and redshift (z) of the galaxy to the halo's values
         self.lookbacktime = self.halo.lookbacktime
@@ -1153,10 +1197,11 @@ class Galaxy(AstroObject):
         # update some derived quantities, here sSFR (and through it rsSFR)
         self.update_sSFR(mode='from SFR')
 
-        # (compute and) update increases/decreases as fractions of gross accreted mass onto galaxy
-        self.update_fstar(mode="afterwards")
-        self.update_fout(mode="afterwards")
-        self.update_fgas(mode="afterwards")
+        # # THIS IS THE ONLY PART THAT NEEDS ALL THE ADDITIONAL SNAPSHOTS – commented out
+        # # (compute and) update increases/decreases as fractions of gross accreted mass onto galaxy
+        # self.update_fstar(mode="afterwards")
+        # self.update_fout(mode="afterwards")
+        # self.update_fgas(mode="afterwards")
 
         return self.make_snapshot()
 

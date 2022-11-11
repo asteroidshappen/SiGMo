@@ -265,7 +265,7 @@ def main():
 
 
     # use data from SDSS or xCG as initial conditions?
-    use_as_ICs = input(f"Specify which data to base the galaxies on: (SDSS/xCG/GMS)")
+    use_as_ICs = str(input(f"Specify which data to base the galaxies on: (SDSS/xCG/GMS/GMS_GAUSS, default: GMS_GAUSS)") or "gms_gauss")
 
     # intial values for Galaxy properties
     if use_as_ICs.casefold() == "SDSS".casefold():  # SDSS
@@ -273,12 +273,14 @@ def main():
         SFR = 10**mstar_and_SFR[:, 1] * 10**9   # CONVERSION of 'per yr' (obs) to 'per Gyr' (sims)
         sSFR = SFR / mstar
         mgas = sgm.calculate_mgas_mstar_from_sSFR_Saintonge2022(sSFR / 10 ** 9, log_values=False, withscatter=False) * mstar
+        SFE = SFR / mgas   # set SFE to one (a.t.m. const) unique value, in harmony with the sSFR relation (through mgas)
         z = 0.
     elif use_as_ICs.casefold() == "xCG".casefold():  # xCG
         mstar = 10**xCG_mstar
         SFR = 10**xCG_SFR * 10**9   # CONVERSION of 'per yr' (obs) to 'per Gyr' (sims)
         sSFR = SFR / mstar
         mgas = 10**xCG_mgas
+        SFE = SFR / mgas   # set SFE to one (a.t.m. const) unique value, in harmony with the sSFR relation (through mgas)
         z = 0.
     elif use_as_ICs.casefold() == "GMS".casefold():  # galaxies on GMS or off GMS, at redshift to be specified
         # input
@@ -299,25 +301,108 @@ def main():
         mstar = 10**mstar_log
         SFR = 10**(sfr_log + SFR_offset) * 10**9   # CONVERSION of 'per yr' (obs) to 'per Gyr' (sims)
         sSFR = SFR / mstar
-        # mgas = sgm.calculate_mgas_mstar_from_sSFR_Tacconi2020(sSFR=sSFR,
-        #                                                       mstar=mstar,
-        #                                                       z=z,
-        #                                                       log=False,
-        #                                                       withscatter=False) * mstar
-        SFE = np.array([1.5] * len(mstar))
-        mgas = SFR / SFE
+        mgas = sgm.calculate_mgas_mstar_from_sSFR_Tacconi2020(sSFR=sSFR,
+                                                              mstar=mstar,
+                                                              z=z,
+                                                              log=False,
+                                                              withscatter=False) * mstar
+        SFE = SFR / mgas
+        # SFE = np.array([1.5] * len(mstar))
+        # mgas = SFR / SFE
+    elif use_as_ICs.casefold() == "GMS_GAUSS".casefold():
+        # input
+        try:
+            mstar_min = float(input(f"Lowest stellar mass of the galaxies: (log(mstar/M☉), default: 6)") or 6.)
+            mstar_max = float(input(f"Highest stellar mass of the galaxies: (log(mstar/M☉), default: 10)") or 10.)
+            n_gal = int(input(f"Number of galaxies between "
+                                f"log(mstar/M☉) = {mstar_min} to {mstar_max}: (default: 100)") or 100)
+            z = float(input(f"Redshift of the GMS: (default: 2)") or 2.)
+            t_length = float(input(f"Run time of the simulation: (Gyr, default: all until z=0)") or 0.)
+            time_res = float(input(f"Time step resolution: (Gyr, default: 1.e-3)") or 1.e-3)
+            wtd = int(input(f"Write output to disk every n-th time step: (default: 1)") or 1)
+            SFR_offset = float(input(f"Offset ΔSFR of galaxies from the GMS: (log(ΔSFR/M☉ yr⁻¹), default: 0)") or 0.)
+            sfr_sigma = float(input(f"Standard deviation of the Gaussian SFR distribution: (dex, default: 0.3)") or 0.3)
+        except ValueError:
+            print("Some input value(s) could not be converted to numeric value(s)")
+            mstar_min, mstar_max, n_gal, z, SFR_offset, sfr_sigma = tuple([None] * 6)  # will crash the code in the next lines
+
+        # calc IC values
+
+        # initiate rng
+        rng = np.random.default_rng(12345)
+
+        # two random dist
+        mstar_log = rng.uniform(low=mstar_min,
+                                high=mstar_max,
+                                size=n_gal)
+        sfr_normal_log = rng.normal(loc=SFR_offset,
+                             scale=sfr_sigma,
+                             size=n_gal)
+
+        # calc GMS and add it to the SFR normal dist
+        gms_sfr_log = sgm.GMS_Leslie2020(mstar_log, z=z, log=True)
+        sfr_log = sfr_normal_log + gms_sfr_log
+
+        # convert from log and calc further data
+        mstar = 10**mstar_log
+        SFR = 10**sfr_log * 10**9   # CONVERSION of 'per yr' (obs) to 'per Gyr' (sims)
+        sSFR = SFR / mstar
+        mgas = sgm.calculate_mgas_mstar_from_sSFR_Tacconi2020(sSFR=sSFR,
+                                                              mstar=mstar,
+                                                              z=z,
+                                                              log=False,
+                                                              withscatter=False) * mstar
+        SFE = SFR / mgas
+
+        # control plot?
+        plotting = True
+        if plotting:
+            fig_gauss, ax_gauss = plt.subplots(1, 2, figsize=(12, 5))
+
+            ax_gauss[0].axhline(SFR_offset, ls='--', color='xkcd:green', zorder=-1, label=f'In: mean={SFR_offset:.3f}, std={sfr_sigma:.3f}')
+            ax_gauss[0].scatter(mstar_log, sfr_normal_log, label=f'Out: mean={np.mean(sfr_normal_log):.3f}, std={np.std(sfr_normal_log):.3f}, N={n_gal}')
+
+            _mstar_lin = np.linspace(mstar_min, mstar_max, 1000)
+            ax_gauss[1].plot(_mstar_lin, sgm.GMS_Leslie2020(mstar=_mstar_lin, z=z, log=True), ls='--', color='xkcd:green', zorder=-1, label=f'Leslie+20 GMS at z={z}')
+            ax_gauss[1].scatter(mstar_log, sfr_log, label=f'Transformed to GMS')
+
+            for _ax in ax_gauss:
+                _ax.set_xlabel(r'log $M_\mathrm{star}$ [$M_\odot$]')
+                _ax.set_ylabel(r'log $SFR$ [$M_\odot$ yr$^{-1}$]')
+                _ax.tick_params(axis='both', which='both', direction='in', bottom=True, top=True, left=True, right=True)
+                _ax.legend()
+
+            fig_gauss.savefig(plot_dir / f'Generate_Distribution_around_GMS_{datetime.now().strftime("%Y.%m.%d-%H.%M.%S")}.png', dpi=300)
+
+
     elif isinstance(use_as_ICs, str):
         raise ValueError
     else:
         raise TypeError
 
+
+    # change the overall accretion scaling (aka sMIR_scaling) from the default 1?
+    sMIR_scaling_basefactor = float(input(f"Enter off-GMS sMIR accretion scaling: (Gyr⁻¹ / dex ΔSFR, default: 1)") or 1.)
+    if sMIR_scaling_basefactor == 1:
+        sMIR_scaling = np.array([1.] * len(mstar))
+    else:
+        sfr_gms = sgm.GMS_Leslie2020(mstar, z=z, log=False) * 10**9   # conversion from yr⁻¹ to Gyr⁻¹ (like SFR)
+        delta_sfr_log = np.log10(SFR / sfr_gms)
+        sMIR_scaling = np.array([1.] * len(mstar)) * (sMIR_scaling_basefactor**delta_sfr_log)
+
+
+    # set an sMIR_scaling_updater (if desired; if not, set to None)
+    # sMIR_scaling_updater = np.array([sgm.sMIR_scaling_updater_deltaGMS] * len(mstar))
+    sMIR_scaling_updater = np.array([None] * len(mstar))
+
+
     # SFE = np.array([1.] * len(mstar))
     # SFE = SFR / mgas   # set SFE to one (a.t.m. const) unique value, in harmony with the sSFR relation (through mgas)
-    # fgal = np.array([0.4] * len(mstar))  # following Lilly+13
+    fgal = np.array([0.4] * len(mstar))  # following Lilly+13
     # fgal = np.array([0.3] * len(mstar))  # slightly lower accretion than Lilly+13
     # fgal = np.array([0.5] * len(mstar))  # slightly higher accretion than Lilly+13
     # fgal = np.array([0.1] * len(mstar))  # significantly lower than Lilly+13
-    fgal = np.array([0.01] * len(mstar))  # ridiculously much lower than Lilly+13
+    # fgal = np.array([0.01] * len(mstar))  # ridiculously much lower than Lilly+13
     MLF = np.array([0.1] * len(mstar))
     # MLF = np.array([0.05] * len(mstar))
     # MLF = np.array([0.2] * len(mstar))
@@ -405,6 +490,9 @@ def main():
     IC_halo_mdm = sgm.IC.single_param('mdm', (1. / (BDR + 1.)) * mhalo)
     IC_halo_mgas = sgm.IC.single_param('mgas', ((BDR / (BDR + 1.)) * mhalo) - (mgas + mstar))
     IC_halo_HLF = sgm.IC.single_param('HLF', HLF)
+    IC_halo_sMIR_scaling = sgm.IC.single_param('sMIR_scaling', sMIR_scaling)
+    IC_halo_sMIR_scaling_basefactor = sgm.IC.single_param('sMIR_scaling_basefactor', np.array([sMIR_scaling_basefactor] * len(mstar)))
+    IC_halo_sMIR_scaling_updater = sgm.IC.single_param('sMIR_scaling_updater', sMIR_scaling_updater)
 
     # Environment IC
     IC_env_zstart = sgm.IC.single_param('zstart', [z])  # can also use 'lookbacktime' (Gyrs) instead of zstart
@@ -417,7 +505,10 @@ def main():
                     IC_halo_BDR +
                     IC_halo_mdm +
                     IC_halo_mgas +
-                    IC_halo_HLF)
+                    IC_halo_HLF +
+                    IC_halo_sMIR_scaling +
+                    IC_halo_sMIR_scaling_basefactor +
+                    IC_halo_sMIR_scaling_updater)
     IC_gal_comb = (IC_gal_mstar +
                    IC_gal_SFR +
                    IC_gal_sSFR +
@@ -500,7 +591,7 @@ def main():
 
 
         # # THIS IS JUST BACKWARDS INTEGRATION FROM z=0, BUT FARTHER
-        #
+        # 
         # # create BACKWARD integrator
         # Integrator = sgm.FTI(
         #     env=env,
@@ -510,7 +601,7 @@ def main():
         #     t_start=env.lookbacktime,
         #     t_end=2
         # )
-        #
+        # 
         # # run the BACKWARD integrator
         # print("Starting integration")
         # Integrator.integrate(
@@ -545,25 +636,135 @@ def main():
 
 
 
-        # THIS IS FORWARDS INTEGRATION FROM z SET EARLIER, RUNNING UNTIL z=0
+        # # THIS IS FORWARDS INTEGRATION FROM z SET EARLIER, RUNNING UNTIL z=0
+        # 
+        # # create BACKWARD integrator
+        # Integrator = sgm.FTI(
+        #     env=env,
+        #     evolve_method='evolve',
+        #     dt=1.e-3,
+        #     t_start=env.lookbacktime,
+        #     t_end=0.
+        # )
+        # 
+        # # run the BACKWARD integrator
+        # print("Starting integration")
+        # Integrator.integrate(
+        #     wtd=1,
+        #     # wtd=10,
+        #     outdir=out_dir / f"0_forward_from_z{z}_to_z0_dt1e-3_SFRoffset{SFR_offset}",
+        #     single_snapshots=False
+        # )
+
+
+        # # THIS (again) IS JUST BACKWARDS INTEGRATION FROM z=0, BUT FARTHER and with ΔSFR dependent sMIR scaling
+        #
+        # # create BACKWARD integrator
+        # Integrator = sgm.FTI(
+        #     env=env,
+        #     evolve_method='evolve',
+        #     dt=-1.e-3,
+        #     # dt=-1.e-4,
+        #     t_start=env.lookbacktime,
+        #     t_end=2
+        # )
+        #
+        # # run the BACKWARD integrator
+        # print("Starting integration")
+        # Integrator.integrate(
+        #     wtd=1,
+        #     # wtd=10,
+        #     outdir=out_dir / f"0_backward_2Gyr_dt1e-3_sMIR_scaling_basefactor{sMIR_scaling_basefactor}",
+        #     # outdir=out_dir / "0_backward_2Gyr_dt1e-4_wtd10",
+        #     single_snapshots=False
+        # )
+
+
+
+        # # THIS (again) IS FORWARDS INTEGRATION FROM z SET EARLIER, RUNNING UNTIL z=0
+        #
+        # # create BACKWARD integrator
+        # Integrator = sgm.FTI(
+        #     env=env,
+        #     evolve_method='evolve',
+        #     dt=1.e-3,
+        #     t_start=env.lookbacktime,
+        #     t_end=0.
+        # )
+        #
+        # # run the BACKWARD integrator
+        # print("Starting integration")
+        # Integrator.integrate(
+        #     wtd=1,
+        #     outdir=out_dir / f"0_forward_from_z{z}_to_z0_dt1e-3_SFRoffset{SFR_offset}_sMIR_scaling_basefactor{sMIR_scaling_basefactor}",
+        #     single_snapshots=False
+        # )
+
+
+        # # THIS (again) IS FORWARDS INTEGRATION FROM z SET EARLIER, RUNNING UNTIL z=0
+        # # 10-TIMES HIGHER TIME RESOLUTION (but same number of outputs)
+        #
+        # time_res = 1.e-4
+        #
+        # # check that time res is single digit precision
+        # time_res_str = str(f'{time_res:.0e}')
+        # time_res_float_from_str = float(time_res_str)
+        # assert np.isclose(time_res, time_res_float_from_str, atol=time_res/100)
+        #
+        #
+        # # create BACKWARD integrator
+        # Integrator = sgm.FTI(
+        #     env=env,
+        #     evolve_method='evolve',
+        #     dt=time_res,
+        #     t_start=env.lookbacktime,
+        #     t_end=0.
+        # )
+        #
+        # # run the BACKWARD integrator
+        # wtd = 10
+        # print("Starting integration")
+        # Integrator.integrate(
+        #     wtd=wtd,
+        #     outdir=out_dir / f"gms_gauss_from_z{z}_to_z0_dt{time_res:.0e}_wtd{wtd}_sigma{sfr_sigma:.3f}_sMIR_scaling_basefactor{sMIR_scaling_basefactor}",
+        #     single_snapshots=False
+        # )
+
+
+
+        # THIS (again) IS FORWARDS INTEGRATION FROM z SET EARLIER, RUNNING UNTIL z=0
+        # NORMAL TIME RESOLUTION (but same number of outputs)
+        # HIGHER SIGMA (0.3) from input at runtime
+
+        # time_res = 1.e-3
+
+        # check that time res is single digit precision
+        time_res_str = str(f'{time_res:.0e}')
+        time_res_float_from_str = float(time_res_str)
+        assert np.isclose(time_res, time_res_float_from_str, atol=time_res/100)
+
 
         # create BACKWARD integrator
+        t_end = env.lookbacktime - t_length if t_length > 0. else 0.
+
         Integrator = sgm.FTI(
             env=env,
             evolve_method='evolve',
-            dt=1.e-3,
+            dt=time_res,
             t_start=env.lookbacktime,
-            t_end=0.
+            t_end=t_end
         )
 
         # run the BACKWARD integrator
+        # wtd = 1
         print("Starting integration")
         Integrator.integrate(
-            wtd=1,
-            # wtd=10,
-            outdir=out_dir / f"0_forward_from_z{z}_to_z0_dt1e-3_SFRoffset{SFR_offset}",
+            wtd=wtd,
+            outdir=out_dir / f"{use_as_ICs}_from_z{z}_to_z0_dt{time_res:.0e}_wtd{wtd}_sigma{sfr_sigma:.3f}_sMIR_scaling_basefactor{sMIR_scaling_basefactor}",
             single_snapshots=False
         )
+
+
 
 
     elif (run_sim == "n".casefold()) or (run_sim == "no".casefold()):
