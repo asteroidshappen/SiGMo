@@ -265,7 +265,10 @@ def main():
 
 
     # use data from SDSS or xCG as initial conditions?
-    use_as_ICs = str(input(f"Specify which data to base the galaxies on: (SDSS/xCG/GMS/GMS_GAUSS, default: GMS_GAUSS)") or "gms_gauss")
+    use_as_ICs = str(input(f"Specify which data to base the galaxies on: (SDSS/xCG/GMS/GMS_GAUSS/GMS_MHALO_SINGLE/GMS_MHALO_POPULATION, default: GMS_MHALO_POPULATION)") or "gms_mhalo_population")
+
+    # set mhalo to None so can be calculated earlier or later in the code, dependent on case selected below
+    mhalo = None
 
     # intial values for Galaxy properties
     if use_as_ICs.casefold() == "SDSS".casefold():  # SDSS
@@ -275,6 +278,7 @@ def main():
         mgas = sgm.calculate_mgas_mstar_from_sSFR_Saintonge2022(sSFR / 10 ** 9, log_values=False, withscatter=False) * mstar
         SFE = SFR / mgas   # set SFE to one (a.t.m. const) unique value, in harmony with the sSFR relation (through mgas)
         z = 0.
+
     elif use_as_ICs.casefold() == "xCG".casefold():  # xCG
         mstar = 10**xCG_mstar
         SFR = 10**xCG_SFR * 10**9   # CONVERSION of 'per yr' (obs) to 'per Gyr' (sims)
@@ -282,6 +286,7 @@ def main():
         mgas = 10**xCG_mgas
         SFE = SFR / mgas   # set SFE to one (a.t.m. const) unique value, in harmony with the sSFR relation (through mgas)
         z = 0.
+
     elif use_as_ICs.casefold() == "GMS".casefold():  # galaxies on GMS or off GMS, at redshift to be specified
         # input
         try:
@@ -309,6 +314,7 @@ def main():
         SFE = SFR / mgas
         # SFE = np.array([1.5] * len(mstar))
         # mgas = SFR / SFE
+
     elif use_as_ICs.casefold() == "GMS_GAUSS".casefold():
         # input
         try:
@@ -375,6 +381,154 @@ def main():
             fig_gauss.savefig(plot_dir / f'Generate_Distribution_around_GMS_{datetime.now().strftime("%Y.%m.%d-%H.%M.%S")}.png', dpi=300)
 
 
+    elif use_as_ICs.casefold() == "GMS_MHALO_SINGLE".casefold():    # implementing scatter in the stellar to halo mass relation
+        # input
+        try:
+            mstar_single = float(input(f"Stellar mass of the galaxies: (log(mstar/M☉), default: 8)") or 8.)
+            n_gal = int(input(f"Number of galaxies at "
+                                f"log(mstar/M☉) = {mstar_single}: (default: 40)") or 40)
+            z = float(input(f"Redshift of the GMS: (default: 2)") or 2.)
+            t_length = float(input(f"Run time of the simulation: (Gyr, default: all until z=0)") or 0.)
+            time_res = float(input(f"Time step resolution: (Gyr, default: 1.e-3)") or 1.e-3)
+            wtd = int(input(f"Write output to disk every n-th time step: (default: 1)") or 1)
+            SFR_offset = float(input(f"Offset ΔSFR of galaxies from the GMS: (log(ΔSFR/M☉ yr⁻¹), default: 0)") or 0.)
+            mhalo_sigma = float(input(f"Standard deviation of the Gaussian scatter in the stellar-to-halo mass relation: (dex, default: 0.1)") or 0.1)
+        except ValueError:
+            print("Some input value(s) could not be converted to numeric value(s)")
+            mstar_single, n_gal, z, SFR_offset, mhalo_sigma = tuple([None] * 5)  # will crash the code in the next lines
+
+        # calc IC values
+
+        # all mstar values are the same here
+        mstar_log = np.array([mstar_single] * n_gal)
+
+        # calc GMS and add to it the SFR GMS offset (if any)
+        gms_sfr_log = sgm.GMS_Leslie2020(mstar_log, z=z, log=True)
+        sfr_log = gms_sfr_log + np.array([SFR_offset] * n_gal)
+
+        # convert from log and calc further data
+        mstar = 10**mstar_log
+        SFR = 10**sfr_log * 10**9   # CONVERSION of 'per yr' (obs) to 'per Gyr' (sims)
+        sSFR = SFR / mstar
+        mgas = sgm.calculate_mgas_mstar_from_sSFR_Tacconi2020(sSFR=sSFR,
+                                                              mstar=mstar,
+                                                              z=z,
+                                                              log=False,
+                                                              withscatter=False) * mstar
+        SFE = SFR / mgas
+
+        # mhalo
+        mhalo_noscatter = np.array([sgm.iter_mhalo_from_mstar(mstar_i, z=z, try_lookup=False, interpolate=True) for mstar_i in mstar])
+
+        # initiate rng
+        rng = np.random.default_rng(12345)
+
+        # one random dist
+        mhalo_normal_log = rng.normal(loc=0.,
+                                      scale=mhalo_sigma,
+                                      size=n_gal)
+
+        mhalo_log = np.log10(mhalo_noscatter) + mhalo_normal_log
+        mhalo = 10**mhalo_log
+
+        # control plot?
+        plotting = True
+        if plotting:
+            fig_gauss, ax_gauss = plt.subplots(1, 2, figsize=(12, 5))
+
+            ax_gauss[0].axhline(0., ls='--', color='xkcd:green', zorder=-1, label=f'In: mean={0.:.3f}, std={mhalo_sigma:.3f}')
+            ax_gauss[0].scatter(mstar_log, mhalo_normal_log, label=f'Out: mean={np.mean(mhalo_normal_log):.3f}, std={np.std(mhalo_normal_log):.3f}, N={n_gal}')
+
+            # _mstar_lin = np.linspace(np.min(mstar_log), np.max(mstar_log), 1000)
+            ax_gauss[1].plot(mstar_log, np.log10(mhalo_noscatter), marker="x", ls='none', color='xkcd:green', zorder=-1, label=f'No scatter in halo mass at z={z}')
+            ax_gauss[1].scatter(mstar_log, mhalo_log, label=f'With added scatter')
+
+            for _ax in ax_gauss:
+                _ax.set_xlabel(r'log $M_\mathrm{star}$ [$M_\odot$]')
+                _ax.set_ylabel(r'log $M_\mathrm{halo}$ [$M_\odot$]')
+                _ax.tick_params(axis='both', which='both', direction='in', bottom=True, top=True, left=True, right=True)
+                _ax.legend()
+
+            fig_gauss.savefig(plot_dir / f'Generate_Distribution_around_Mhalo_{datetime.now().strftime("%Y.%m.%d-%H.%M.%S")}.png', dpi=300)
+
+
+    elif use_as_ICs.casefold() == "GMS_MHALO_POPULATION".casefold():    # implementing scatter in the stellar to halo mass relation
+        # input
+        try:
+            mstar_min = float(input(f"Lowest stellar mass of the galaxies: (log(mstar/M☉), default: 6)") or 6.)
+            mstar_max = float(input(f"Highest stellar mass of the galaxies: (log(mstar/M☉), default: 9)") or 9.)
+            n_gal = int(input(f"Number of galaxies between "
+                              f"log(mstar/M☉) = {mstar_min} to {mstar_max}: (default: 100)") or 100)
+            z = float(input(f"Redshift of the GMS: (default: 2)") or 2.)
+            t_length = float(input(f"Run time of the simulation: (Gyr, default: all until z=0)") or 0.)
+            time_res = float(input(f"Time step resolution: (Gyr, default: 1.e-3)") or 1.e-3)
+            wtd = int(input(f"Write output to disk every n-th time step: (default: 1)") or 1)
+            SFR_offset = float(input(f"Offset ΔSFR of galaxies from the GMS: (log(ΔSFR/M☉ yr⁻¹), default: 0)") or 0.)
+            mhalo_sigma = float(input(f"Standard deviation of the Gaussian scatter in the stellar-to-halo mass relation: (dex, default: 0.1)") or 0.1)
+        except ValueError:
+            print("Some input value(s) could not be converted to numeric value(s)")
+            mstar_min, mstar_max, n_gal, z, SFR_offset, mhalo_sigma = tuple([None] * 6)  # will crash the code in the next lines
+
+        # calc IC values
+
+        # # all mstar values are the same here
+        # mstar_log = np.array([mstar_single] * n_gal)
+
+
+        # initiate rng
+        rng = np.random.default_rng(12345)
+
+        # two random dist
+        mstar_log = rng.uniform(low=mstar_min,
+                                high=mstar_max,
+                                size=n_gal)
+        mhalo_normal_log = rng.normal(loc=0.,
+                                      scale=mhalo_sigma,
+                                      size=n_gal)
+
+
+        # calc GMS and add to it the SFR GMS offset (if any)
+        gms_sfr_log = sgm.GMS_Leslie2020(mstar_log, z=z, log=True)
+        sfr_log = gms_sfr_log + np.array([SFR_offset] * n_gal)
+
+        # convert from log and calc further data
+        mstar = 10**mstar_log
+        SFR = 10**sfr_log * 10**9   # CONVERSION of 'per yr' (obs) to 'per Gyr' (sims)
+        sSFR = SFR / mstar
+        mgas = sgm.calculate_mgas_mstar_from_sSFR_Tacconi2020(sSFR=sSFR,
+                                                              mstar=mstar,
+                                                              z=z,
+                                                              log=False,
+                                                              withscatter=False) * mstar
+        SFE = SFR / mgas
+
+        # mhalo
+        mhalo_noscatter = np.array([sgm.iter_mhalo_from_mstar(mstar_i, z=z, try_lookup=False, interpolate=True) for mstar_i in mstar])
+
+        mhalo_log = np.log10(mhalo_noscatter) + mhalo_normal_log
+        mhalo = 10**mhalo_log
+
+        # control plot?
+        plotting = True
+        if plotting:
+            fig_gauss, ax_gauss = plt.subplots(1, 2, figsize=(12, 5))
+
+            ax_gauss[0].axhline(0., ls='--', color='xkcd:green', zorder=-1, label=f'In: mean={0.:.3f}, std={mhalo_sigma:.3f}')
+            ax_gauss[0].scatter(mstar_log, mhalo_normal_log, label=f'Out: mean={np.mean(mhalo_normal_log):.3f}, std={np.std(mhalo_normal_log):.3f}, N={n_gal}')
+
+            # _mstar_lin = np.linspace(np.min(mstar_log), np.max(mstar_log), 1000)
+            ax_gauss[1].plot(mstar_log, np.log10(mhalo_noscatter), marker="x", ls='none', color='xkcd:green', zorder=-1, label=f'No scatter in halo mass at z={z}')
+            ax_gauss[1].scatter(mstar_log, mhalo_log, label=f'With added scatter')
+
+            for _ax in ax_gauss:
+                _ax.set_xlabel(r'log $M_\mathrm{star}$ [$M_\odot$]')
+                _ax.set_ylabel(r'log $M_\mathrm{halo}$ [$M_\odot$]')
+                _ax.tick_params(axis='both', which='both', direction='in', bottom=True, top=True, left=True, right=True)
+                _ax.legend()
+
+            fig_gauss.savefig(plot_dir / f'Generate_Distribution_around_Mhalo_{datetime.now().strftime("%Y.%m.%d-%H.%M.%S")}.png', dpi=300)
+
+
     elif isinstance(use_as_ICs, str):
         raise ValueError
     else:
@@ -408,7 +562,9 @@ def main():
     # MLF = np.array([0.2] * len(mstar))
 
     # initial values for Halo properties
-    mhalo = np.array([sgm.iter_mhalo_from_mstar(mstar_i, z=z, try_lookup=False, interpolate=True) for mstar_i in mstar])
+    # set halo mass unless it's already been done
+    if mhalo is None:
+        mhalo = np.array([sgm.iter_mhalo_from_mstar(mstar_i, z=z, try_lookup=False, interpolate=True) for mstar_i in mstar])
     # BDR = np.array([0.2] * len(mstar))
     BDR = np.array([0.15] * len(mstar))  # actual value from Lilly+13
     HLF = np.array([0.1] * len(mstar))
@@ -732,9 +888,78 @@ def main():
 
 
 
+        # # THIS (again) IS FORWARDS INTEGRATION FROM z SET EARLIER, RUNNING UNTIL z=0
+        # # NORMAL TIME RESOLUTION (but same number of outputs)
+        # # HIGHER SIGMA (0.3) from input at runtime
+        #
+        # # time_res = 1.e-3
+        #
+        # # check that time res is single digit precision
+        # time_res_str = str(f'{time_res:.0e}')
+        # time_res_float_from_str = float(time_res_str)
+        # assert np.isclose(time_res, time_res_float_from_str, atol=time_res/100)
+        #
+        #
+        # # create BACKWARD integrator
+        # t_end = env.lookbacktime - t_length if t_length > 0. else 0.
+        #
+        # Integrator = sgm.FTI(
+        #     env=env,
+        #     evolve_method='evolve',
+        #     dt=time_res,
+        #     t_start=env.lookbacktime,
+        #     t_end=t_end
+        # )
+        #
+        # # run the BACKWARD integrator
+        # # wtd = 1
+        # print("Starting integration")
+        # Integrator.integrate(
+        #     wtd=wtd,
+        #     outdir=out_dir / f"{use_as_ICs}_from_z{z}_to_z0_dt{time_res:.0e}_wtd{wtd}_sigma{sfr_sigma:.3f}_sMIR_scaling_basefactor{sMIR_scaling_basefactor}",
+        #     single_snapshots=False
+        # )
+
+
+
+
+        # # THIS (again) IS FORWARDS INTEGRATION FROM z SET EARLIER, RUNNING UNTIL z=0
+        # # NORMAL TIME RESOLUTION (but same number of outputs)
+        # # STELLAR TO HALO MASS SCATTER (sigma=0.1) from input at runtime FOR SINGLE MSTAR
+        #
+        # # time_res = 1.e-3
+        #
+        # # check that time res is single digit precision
+        # time_res_str = str(f'{time_res:.0e}')
+        # time_res_float_from_str = float(time_res_str)
+        # assert np.isclose(time_res, time_res_float_from_str, atol=time_res/100)
+        #
+        #
+        # # create BACKWARD integrator
+        # t_end = env.lookbacktime - t_length if t_length > 0. else 0.
+        #
+        # Integrator = sgm.FTI(
+        #     env=env,
+        #     evolve_method='evolve',
+        #     dt=time_res,
+        #     t_start=env.lookbacktime,
+        #     t_end=t_end
+        # )
+        #
+        # # run the BACKWARD integrator
+        # # wtd = 1
+        # print("Starting integration")
+        # Integrator.integrate(
+        #     wtd=wtd,
+        #     outdir=out_dir / f"{use_as_ICs}_from_z{z}_to_z0_dt{time_res:.0e}_wtd{wtd}_mhalo_sigma{mhalo_sigma:.3f}_mstar{mstar_single}",
+        #     single_snapshots=False
+        # )
+
+
+
         # THIS (again) IS FORWARDS INTEGRATION FROM z SET EARLIER, RUNNING UNTIL z=0
         # NORMAL TIME RESOLUTION (but same number of outputs)
-        # HIGHER SIGMA (0.3) from input at runtime
+        # STELLAR TO HALO MASS SCATTER (sigma=0.1) from input at runtime FOR DIST OF MSTAR
 
         # time_res = 1.e-3
 
@@ -760,7 +985,7 @@ def main():
         print("Starting integration")
         Integrator.integrate(
             wtd=wtd,
-            outdir=out_dir / f"{use_as_ICs}_from_z{z}_to_z0_dt{time_res:.0e}_wtd{wtd}_sigma{sfr_sigma:.3f}_sMIR_scaling_basefactor{sMIR_scaling_basefactor}",
+            outdir=out_dir / f"{use_as_ICs}_{n_gal}gals_from_z{z}_to_z0_dt{time_res:.0e}_wtd{wtd}_mhalo_sigma{mhalo_sigma:.3f}_mstar{mstar_min}-{mstar_max}",
             single_snapshots=False
         )
 
