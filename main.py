@@ -1,6 +1,7 @@
 import SiGMo as sgm
 
 from pathlib import Path
+import yaml
 
 import numpy as np
 import matplotlib as mpl
@@ -228,14 +229,24 @@ def explore_attrs_and_augment_plot(env, mstar_mesh, sfr_mesh, fig, ax_obs, plot_
 
 
 def main():
+    # read config file
+    project_dir = Path.cwd()
+    local_config = project_dir / "SiGMo_config_local.yml"
+    general_config = project_dir / "SiGMo_config.yml"
+    if local_config.is_file():
+        config = yaml.safe_load(open(local_config))
+    elif general_config.is_file():
+        config = yaml.safe_load(open(general_config))
+    else:
+        raise ValueError
+
     # setting paths
     project_dir = Path.cwd()
-    sfr79_dir = project_dir / 'data' / "SFR79_grids"
+    sfr79_dir = Path(config['paths']['sfr79_dir'])
     date_and_time_str = datetime.now().strftime("%Y.%m.%d-%H.%M.%S")
-    plot_dir = project_dir / 'plots' / '_tmp' / date_and_time_str
+    plot_dir = Path(config['paths']['plot_dir']) / date_and_time_str
     plot_dir.mkdir()
-    out_dir = project_dir / 'outputs' / '_tmp' / date_and_time_str  # only defining the path, not creating yet
-
+    out_dir = Path(config['paths']['out_dir']) / date_and_time_str  # only defining the path, not creating yet
 
     # SDSS
     # reading observational results
