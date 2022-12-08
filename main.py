@@ -1,3 +1,5 @@
+import warnings
+
 import SiGMo as sgm
 
 from pathlib import Path
@@ -231,22 +233,34 @@ def explore_attrs_and_augment_plot(env, mstar_mesh, sfr_mesh, fig, ax_obs, plot_
 def main():
     # read config file
     project_dir = Path.cwd()
-    local_config = project_dir / "SiGMo_config_local.yml"
-    general_config = project_dir / "SiGMo_config.yml"
-    if local_config.is_file():
-        config = yaml.safe_load(open(local_config))
-    elif general_config.is_file():
-        config = yaml.safe_load(open(general_config))
-    else:
+    general_config_path = project_dir / "SiGMo_config.yml"
+    local_config_path = project_dir / "SiGMo_config_local.yml"
+    general_config = yaml.safe_load(open(general_config_path)) if general_config_path.is_file() else {}
+    local_config = yaml.safe_load(open(local_config_path)) if local_config_path.is_file() else {}
+    if (not general_config_path.is_file()) and (not local_config_path.is_file()):
+        warnings.warn(f"Neither {general_config_path} nor {local_config_path} exist!")
         raise ValueError
 
     # setting paths
     project_dir = Path.cwd()
-    sfr79_dir = Path(config['paths']['sfr79_dir'])
+    if 'paths' in general_config:
+        sfr79_dir = Path(general_config['paths']['sfr79_dir'])
+        plot_dir = Path(general_config['paths']['plot_dir'])
+        out_dir = Path(general_config['paths']['out_dir'])  # only defining the path, not creating yet
+    if 'paths' in local_config:
+        sfr79_dir = Path(local_config['paths']['sfr79_dir'])
+        plot_dir = Path(local_config['paths']['plot_dir'])
+        out_dir = Path(local_config['paths']['out_dir'])  # only defining the path, not creating yet
+    if (not 'paths' in general_config) and (not 'paths' in local_config):
+        warnings.warn(f"Neither {general_config_path} nor {local_config_path} contain 'paths' information!")
+        raise ValueError
+
+    # add date-time stamp to plot and out dirs, create the plot directory
     date_and_time_str = datetime.now().strftime("%Y.%m.%d-%H.%M.%S")
-    plot_dir = Path(config['paths']['plot_dir']) / date_and_time_str
+    plot_dir = plot_dir / date_and_time_str
     plot_dir.mkdir()
-    out_dir = Path(config['paths']['out_dir']) / date_and_time_str  # only defining the path, not creating yet
+    out_dir = out_dir / date_and_time_str
+
 
     # SDSS
     # reading observational results
