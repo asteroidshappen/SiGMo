@@ -1,0 +1,4 @@
+paths:
+  sfr79_dir: "/Users/foerster/Projects/SiGMo/data/SFR79_grids"   # read-in directory with SFR79 grids
+  plot_dir: "/Users/foerster/Projects/SiGMo/plots/_tmp"   # plots base directory
+  out_dir: "/Users/foerster/Projects/SiGMo/outputs/_tmp"   # outputs base directory

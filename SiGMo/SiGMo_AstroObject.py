@@ -1,6 +1,10 @@
 # =======
 # Imports
 
+# debug for use in other environments
+import platform
+print("python version that executes SiGMo is", platform.python_version())
+
 # basic
 import copy
 import inspect
