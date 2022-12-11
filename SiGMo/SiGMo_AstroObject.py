@@ -443,6 +443,7 @@ class Halo(AstroObject):
         If sMIR_scaling_updater is a function, it will be called, with only the
         current instance of the halo as an argument, from which all other information
         like redshift etc. needs to be derived (default None)
+    uRandDraw : constant drawn from a uniform random distribution, to be used for
     z : float, optional
         The current redshift of the system (default None)
     zstart : float, optional
@@ -477,6 +478,7 @@ class Halo(AstroObject):
                  sMIR_scaling = 1.,
                  sMIR_scaling_basefactor = 1.,
                  sMIR_scaling_updater = None,
+                 uRandDraw = None,
                  z: float = None
                  ):
         self.env = env
@@ -498,6 +500,11 @@ class Halo(AstroObject):
         self.sMIR_scaling = sMIR_scaling
         self.sMIR_scaling_basefactor = sMIR_scaling_basefactor
         self.sMIR_scaling_updater = sMIR_scaling_updater
+        if uRandDraw is None:
+            rng = np.random.default_rng()
+            self.uRandDraw = rng.uniform(low=0.0, high=1.0, size=None)
+        else:
+            self.uRandDraw = uRandDraw
         self.z = env.z if z is None else z
 
         # re-set sMIR and MIR: don't want to set them properly earlier b/c order of attr. wouldn't be alphabetic
