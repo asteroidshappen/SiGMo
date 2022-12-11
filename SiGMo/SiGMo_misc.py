@@ -522,8 +522,7 @@ def sMIR_scaling_updater_periodicFluctuation(
         halo,
         periodicFunct = np.sin,
         periodicFunct_period: float = 2 * np.pi,
-        fluctuation_period: float = 0.5,  # in Gyr (code-unit of time)
-        fluctuation_offset: float = 0.0  # in Gyr (code-unit of time)
+        fluctuation_period: float = 0.5  # in Gyr (code-unit of time)
 ):
     """
     Specific function to compute a new value for the sMIR_scaling factor
@@ -534,10 +533,10 @@ def sMIR_scaling_updater_periodicFluctuation(
     periodic function, its period, and the physical period of the
     fluctuation. The difference between the sMIR_scaling_basefactor and
     the normal scaling (read: 1) is the amplitude of the resulting
-    fluctuation.
+    fluctuation. uRandDraw is used as basis for the fluctuation offset.
 
-    The resulting expression is
-    s = 1 + (b - 1) * f(c * t)  , with:
+    The resulting expression is:
+    s = 1 + (b - 1) * f(c * t + o)  , with:
      * s : the `sMIR_scaling` factor that gets used in the computation
        of the halo MIR (the return value of this function), and
      * b : the `sMIR_scaling_basefactor` of the Halo, a value that is
@@ -546,9 +545,11 @@ def sMIR_scaling_updater_periodicFluctuation(
      * f : the existing periodic function
      * c : the conversion factor from physical fluctuations to the
        period of the mathematical function
-     * t : the time term, combining the current age of the halo and a
-       fluctuation offset specific to that halo to avoid synchronous
-       oscillations in ensembles of halos
+     * t : the time term, which is the current age of the halo
+     * o : the offset of the fluctuation from the regular cycle of the
+       selected, existing periodic function, in units of its period;
+       the fluctuation offset is specific to that halo to avoid
+       synchronous oscillations in ensembles of halos
 
     :param halo: the Halo instance for with the new `sMIR_scaling` is being
     computed; its age and sMIR_scaling_basefactor are used here
@@ -566,11 +567,12 @@ def sMIR_scaling_updater_periodicFluctuation(
 
     age = halo.age
     sMIR_scaling_basefactor = halo.sMIR_scaling_basefactor
+    uRandDraw = halo.uRandDraw
 
     period_conversion = periodicFunct_period / fluctuation_period
-    time_term = fluctuation_offset + age
+    fluctuation_offset = periodicFunct_period * uRandDraw
 
-    sMIR_scaling = 1 + (sMIR_scaling_basefactor - 1) * periodicFunct(period_conversion * time_term)
+    sMIR_scaling = 1 + (sMIR_scaling_basefactor - 1) * periodicFunct(period_conversion * age + fluctuation_offset)
 
     return sMIR_scaling
 
