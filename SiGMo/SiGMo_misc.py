@@ -501,7 +501,7 @@ def sMIR_scaling_updater_deltaGMS(halo):
        expected to be constant over the lifetime of the Halo instance and
        is only used for these kinds of calculations
 
-    :param halo: the Halo instance for with the new `sMIR_scaling` is being
+    :param halo: the Halo instance for which the new `sMIR_scaling` is being
     computed
     :return: new value for the sMIR_scaling factor
     """
