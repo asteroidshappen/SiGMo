@@ -518,6 +518,63 @@ def sMIR_scaling_updater_deltaGMS(halo):
     return sMIR_scaling
 
 
+def sMIR_scaling_updater_periodicFluctuation(
+        halo,
+        periodicFunct = np.sin,
+        periodicFunct_period: float = 2 * np.pi,
+        fluctuation_period: float = 0.5,  # in Gyr (code-unit of time)
+        fluctuation_offset: float = 0.0  # in Gyr (code-unit of time)
+):
+    """
+    Specific function to compute a new value for the sMIR_scaling factor
+    which scales/regulates the Specific Mass Increase Rate with respect
+    to the (standard/commonly expected) value at a specific redshift.
+
+    This function varies sMIR_scaling periodically, based on an existing
+    periodic function, its period, and the physical period of the
+    fluctuation. The difference between the sMIR_scaling_basefactor and
+    the normal scaling (read: 1) is the amplitude of the resulting
+    fluctuation.
+
+    The resulting expression is
+    s = 1 + (b - 1) * f(c * t)  , with:
+     * s : the `sMIR_scaling` factor that gets used in the computation
+       of the halo MIR (the return value of this function), and
+     * b : the `sMIR_scaling_basefactor` of the Halo, a value that is
+       expected to be constant over the lifetime of the Halo instance
+       and is only used for these kinds of calculations
+     * f : the existing periodic function
+     * c : the conversion factor from physical fluctuations to the
+       period of the mathematical function
+     * t : the time term, combining the current age of the halo and a
+       fluctuation offset specific to that halo to avoid synchronous
+       oscillations in ensembles of halos
+
+    :param halo: the Halo instance for with the new `sMIR_scaling` is being
+    computed; its age and sMIR_scaling_basefactor are used here
+    :param periodicFunct: the existing periodic function the fluctuations
+    will be based upon (default: np.sin)
+    :param periodicFunct_period: the period of the existing periodic
+    function (default: 2. * np.pi, the period of sin(x))
+    :param fluctuation_period: the physical timescale of the fluctuations
+    in Gyr (default: 0.5)
+    :param fluctuation_offset: the time-offset of the physical
+    fluctuations in Gyr, so that not all halos in an ensemble fluctuate
+    in sync/in perfect unison (default: 0.0)
+    :return: new value for sMIR_scaling
+    """
+
+    age = halo.age
+    sMIR_scaling_basefactor = halo.sMIR_scaling_basefactor
+
+    period_conversion = periodicFunct_period / fluctuation_period
+    time_term = fluctuation_offset + age
+
+    sMIR_scaling = 1 + (sMIR_scaling_basefactor - 1) * periodicFunct(period_conversion * time_term)
+
+    return sMIR_scaling
+
+
 # Useful Helper Methods
 
 def calc_bincentres_where_not_nan(value_arr, x_mesh, y_mesh):
