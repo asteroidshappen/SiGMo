@@ -290,10 +290,11 @@ def main():
 
 
     # use data from SDSS or xCG as initial conditions?
-    use_as_ICs = str(input(f"Specify which data to base the galaxies on: (SDSS/xCG/GMS/GMS_GAUSS/GMS_MHALO_SINGLE/GMS_MHALO_POPULATION, default: GMS_MHALO_POPULATION)") or "gms_mhalo_population")
+    use_as_ICs = str(input(f"Specify which data to base the galaxies on: (SDSS/xCG/GMS/GMS_GAUSS/GMS_MHALO_SINGLE/GMS_MHALO_POPULATION/GMS_PERIODIC_FLUCTUATIONS, default: GMS_PERIODIC_FLUCTUATIONS)") or "gms_periodic_fluctuations")
 
-    # set mhalo to None so can be calculated earlier or later in the code, dependent on case selected below
+    # set mhalo and sMIR_scaling_basefactor to None so can be calculated earlier or later in the code, dependent on case selected below
     mhalo = None
+    sMIR_scaling_basefactor = None
 
     # intial values for Galaxy properties
     if use_as_ICs.casefold() == "SDSS".casefold():  # SDSS
@@ -321,6 +322,7 @@ def main():
                                 f"log(mstar/M☉) = {mstar_min} to {mstar_max}: (default: 50)") or 50)
             z = float(input(f"Redshift of the GMS: (default: 0)") or 0.)
             SFR_offset = float(input(f"Offset ΔSFR of galaxies from the GMS: (log(ΔSFR/M☉ yr⁻¹), default: 0)") or 0.)
+            sMIR_scaling_basefactor = float(input(f"Enter off-GMS sMIR accretion scaling: (Gyr⁻¹ / dex ΔSFR, default: 1)") or 1.)
         except ValueError:
             print("Some input value(s) could not be converted to numeric value(s)")
             mstar_min, mstar_max, mstar_n, z, SFR_offset = tuple([None] * 5)  # will crash the code in the next lines
@@ -353,6 +355,7 @@ def main():
             wtd = int(input(f"Write output to disk every n-th time step: (default: 1)") or 1)
             SFR_offset = float(input(f"Offset ΔSFR of galaxies from the GMS: (log(ΔSFR/M☉ yr⁻¹), default: 0)") or 0.)
             sfr_sigma = float(input(f"Standard deviation of the Gaussian SFR distribution: (dex, default: 0.3)") or 0.3)
+            sMIR_scaling_basefactor = float(input(f"Enter off-GMS sMIR accretion scaling: (Gyr⁻¹ / dex ΔSFR, default: 1)") or 1.)
         except ValueError:
             print("Some input value(s) could not be converted to numeric value(s)")
             mstar_min, mstar_max, n_gal, z, SFR_offset, sfr_sigma = tuple([None] * 6)  # will crash the code in the next lines
@@ -418,6 +421,7 @@ def main():
             wtd = int(input(f"Write output to disk every n-th time step: (default: 1)") or 1)
             SFR_offset = float(input(f"Offset ΔSFR of galaxies from the GMS: (log(ΔSFR/M☉ yr⁻¹), default: 0)") or 0.)
             mhalo_sigma = float(input(f"Standard deviation of the Gaussian scatter in the stellar-to-halo mass relation: (dex, default: 0.1)") or 0.1)
+            sMIR_scaling_basefactor = float(input(f"Enter off-GMS sMIR accretion scaling: (Gyr⁻¹ / dex ΔSFR, default: 1)") or 1.)
         except ValueError:
             print("Some input value(s) could not be converted to numeric value(s)")
             mstar_single, n_gal, z, SFR_offset, mhalo_sigma = tuple([None] * 5)  # will crash the code in the next lines
@@ -490,6 +494,7 @@ def main():
             wtd = int(input(f"Write output to disk every n-th time step: (default: 1)") or 1)
             SFR_offset = float(input(f"Offset ΔSFR of galaxies from the GMS: (log(ΔSFR/M☉ yr⁻¹), default: 0)") or 0.)
             mhalo_sigma = float(input(f"Standard deviation of the Gaussian scatter in the stellar-to-halo mass relation: (dex, default: 0.1)") or 0.1)
+            sMIR_scaling_basefactor = float(input(f"Enter off-GMS sMIR accretion scaling: (Gyr⁻¹ / dex ΔSFR, default: 1)") or 1.)
         except ValueError:
             print("Some input value(s) could not be converted to numeric value(s)")
             mstar_min, mstar_max, n_gal, z, SFR_offset, mhalo_sigma = tuple([None] * 6)  # will crash the code in the next lines
@@ -554,25 +559,104 @@ def main():
             fig_gauss.savefig(plot_dir / f'Generate_Distribution_around_Mhalo_{datetime.now().strftime("%Y.%m.%d-%H.%M.%S")}.png', dpi=300)
 
 
+    elif use_as_ICs.casefold() == "GMS_PERIODIC_FLUCTUATIONS".casefold():    # implementing scatter in the stellar to halo mass relation
+        # input
+        try:
+            mstar_min = float(input(f"Lowest stellar mass of the galaxies: (log(mstar/M☉), default: 6)") or 6.)
+            mstar_max = float(input(f"Highest stellar mass of the galaxies: (log(mstar/M☉), default: 9)") or 9.)
+            n_gal = int(input(f"Number of galaxies between "
+                              f"log(mstar/M☉) = {mstar_min} to {mstar_max}: (default: 100)") or 100)
+            z = float(input(f"Redshift of the GMS: (default: 2)") or 2.)
+            t_length = float(input(f"Run time of the simulation: (Gyr, default: all until z=0)") or 0.)
+            time_res = float(input(f"Time step resolution: (Gyr, default: 1.e-3)") or 1.e-3)
+            wtd = int(input(f"Write output to disk every n-th time step: (default: 1)") or 1)
+            SFR_offset = float(input(f"Offset ΔSFR of galaxies from the GMS: (log(ΔSFR/M☉ yr⁻¹), default: 0)") or 0.)
+            sMIR_scaling_basefactor = float(input(f"Relative amplitude of fluctuations via sMIR accretion scaling: (Gyr⁻¹, default: 1)") or 1.)
+        except ValueError:
+            print("Some input value(s) could not be converted to numeric value(s)")
+            mstar_min, mstar_max, n_gal, z, SFR_offset, sMIR_scaling_basefactor = tuple([None] * 6)  # will crash the code in the next lines
+
+        # calc IC values
+
+        # # all mstar values are the same here
+        # mstar_log = np.array([mstar_single] * n_gal)
+
+
+        # initiate rng
+        rng = np.random.default_rng(12345)
+
+        # two random dist
+        mstar_log = rng.uniform(low=mstar_min,
+                                high=mstar_max,
+                                size=n_gal)
+        uRandDraw = rng.uniform(low=0.,
+                                high=1.,
+                                size=n_gal)
+
+
+        # calc GMS and add to it the SFR GMS offset (if any)
+        gms_sfr_log = sgm.GMS_Leslie2020(mstar_log, z=z, log=True)
+        sfr_log = gms_sfr_log + np.array([SFR_offset] * n_gal)
+
+        # convert from log and calc further data
+        mstar = 10**mstar_log
+        SFR = 10**sfr_log * 10**9   # CONVERSION of 'per yr' (obs) to 'per Gyr' (sims)
+        sSFR = SFR / mstar
+        mgas = sgm.calculate_mgas_mstar_from_sSFR_Tacconi2020(sSFR=sSFR,
+                                                              mstar=mstar,
+                                                              z=z,
+                                                              log=False,
+                                                              withscatter=False) * mstar
+        SFE = SFR / mgas
+
+        # mhalo
+        mhalo = np.array([sgm.iter_mhalo_from_mstar(mstar_i, z=z, try_lookup=False, interpolate=True) for mstar_i in mstar])
+
+        # control plot?
+        plotting = True
+        if plotting:
+            fig_ur, ax_ur = plt.subplots(1, 1, figsize=(12, 5))
+
+            # ax_ur.axhline(0., ls='--', color='xkcd:green', zorder=-1, label=f'In: sMIR={1.:.3f} (normalised)')
+            ax_ur.scatter(mstar_log, uRandDraw, label=f'Offset in fluctuation (in units of period), N={n_gal}')
+
+            ax_ur.set_xlabel(r'log $M_\mathrm{star}$ [$M_\odot$]')
+            ax_ur.set_ylabel(r'log $M_\mathrm{halo}$ [$M_\odot$]')
+            ax_ur.tick_params(axis='both', which='both', direction='in', bottom=True, top=True, left=True, right=True)
+            ax_ur.legend()
+
+            fig_ur.savefig(plot_dir / f'Generate_Offsets_for_periodic_fluctuations_{datetime.now().strftime("%Y.%m.%d-%H.%M.%S")}.png', dpi=300)
+
+
     elif isinstance(use_as_ICs, str):
         raise ValueError
     else:
         raise TypeError
 
 
-    # change the overall accretion scaling (aka sMIR_scaling) from the default 1?
-    sMIR_scaling_basefactor = float(input(f"Enter off-GMS sMIR accretion scaling: (Gyr⁻¹ / dex ΔSFR, default: 1)") or 1.)
+    # in case it wasn't set
+    sMIR_scaling_basefactor = 1 if sMIR_scaling_basefactor is None else sMIR_scaling_basefactor
+
+    # # change the overall accretion scaling (aka sMIR_scaling) from the default 1?
+    # sMIR_scaling_basefactor = float(input(f"Enter off-GMS sMIR accretion scaling: (Gyr⁻¹ / dex ΔSFR, default: 1)") or 1.)
     if sMIR_scaling_basefactor == 1:
         sMIR_scaling = np.array([1.] * len(mstar))
+        sMIR_scaling_updater = np.array([None] * len(mstar))
+    elif use_as_ICs.casefold() == "GMS_PERIODIC_FLUCTUATIONS".casefold():
+        # HARDCODED: SIN and other details of sMIR_scaling_updater_periodicFluctuation()  !!!
+        period_conversion = 2 * np.pi / 0.5  # Gyr, soooo much HARDCODING!!
+        fluctuation_offset = 2 * np.pi * uRandDraw
+        sMIR_scaling = 1 + (sMIR_scaling_basefactor - 1) * np.sin(period_conversion * 0. + fluctuation_offset)
+        sMIR_scaling_updater = np.array([sgm.sMIR_scaling_updater_periodicFluctuation] * len(mstar))
     else:
         sfr_gms = sgm.GMS_Leslie2020(mstar, z=z, log=False) * 10**9   # conversion from yr⁻¹ to Gyr⁻¹ (like SFR)
         delta_sfr_log = np.log10(SFR / sfr_gms)
         sMIR_scaling = np.array([1.] * len(mstar)) * (sMIR_scaling_basefactor**delta_sfr_log)
 
+        # set an sMIR_scaling_updater (if desired; if not, set to None)
+        # sMIR_scaling_updater = np.array([sgm.sMIR_scaling_updater_deltaGMS] * len(mstar))
+        sMIR_scaling_updater = np.array([None] * len(mstar))
 
-    # set an sMIR_scaling_updater (if desired; if not, set to None)
-    # sMIR_scaling_updater = np.array([sgm.sMIR_scaling_updater_deltaGMS] * len(mstar))
-    sMIR_scaling_updater = np.array([None] * len(mstar))
 
 
     # SFE = np.array([1.] * len(mstar))
@@ -674,6 +758,7 @@ def main():
     IC_halo_sMIR_scaling = sgm.IC.single_param('sMIR_scaling', sMIR_scaling)
     IC_halo_sMIR_scaling_basefactor = sgm.IC.single_param('sMIR_scaling_basefactor', np.array([sMIR_scaling_basefactor] * len(mstar)))
     IC_halo_sMIR_scaling_updater = sgm.IC.single_param('sMIR_scaling_updater', sMIR_scaling_updater)
+    IC_halo_uRandDraw = sgm.IC.single_param('uRandDraw', uRandDraw)
 
     # Environment IC
     IC_env_zstart = sgm.IC.single_param('zstart', [z])  # can also use 'lookbacktime' (Gyrs) instead of zstart
@@ -689,7 +774,8 @@ def main():
                     IC_halo_HLF +
                     IC_halo_sMIR_scaling +
                     IC_halo_sMIR_scaling_basefactor +
-                    IC_halo_sMIR_scaling_updater)
+                    IC_halo_sMIR_scaling_updater +
+                    IC_halo_uRandDraw)
     IC_gal_comb = (IC_gal_mstar +
                    IC_gal_SFR +
                    IC_gal_sSFR +
@@ -982,6 +1068,41 @@ def main():
 
 
 
+        # # THIS (again) IS FORWARDS INTEGRATION FROM z SET EARLIER, RUNNING UNTIL z=0
+        # # NORMAL TIME RESOLUTION (but same number of outputs)
+        # # STELLAR TO HALO MASS SCATTER (sigma=0.1) from input at runtime FOR DIST OF MSTAR
+        #
+        # # time_res = 1.e-3
+        #
+        # # check that time res is single digit precision
+        # time_res_str = str(f'{time_res:.0e}')
+        # time_res_float_from_str = float(time_res_str)
+        # assert np.isclose(time_res, time_res_float_from_str, atol=time_res/100)
+        #
+        #
+        # # create BACKWARD integrator
+        # t_end = env.lookbacktime - t_length if t_length > 0. else 0.
+        #
+        # Integrator = sgm.FTI(
+        #     env=env,
+        #     evolve_method='evolve',
+        #     dt=time_res,
+        #     t_start=env.lookbacktime,
+        #     t_end=t_end
+        # )
+        #
+        # # run the BACKWARD integrator
+        # # wtd = 1
+        # print("Starting integration")
+        # Integrator.integrate(
+        #     wtd=wtd,
+        #     outdir=out_dir / f"{use_as_ICs}_{n_gal}gals_from_z{z}_to_z0_dt{time_res:.0e}_wtd{wtd}_mhalo_sigma{mhalo_sigma:.3f}_mstar{mstar_min}-{mstar_max}",
+        #     single_snapshots=False
+        # )
+
+
+
+
         # THIS (again) IS FORWARDS INTEGRATION FROM z SET EARLIER, RUNNING UNTIL z=0
         # NORMAL TIME RESOLUTION (but same number of outputs)
         # STELLAR TO HALO MASS SCATTER (sigma=0.1) from input at runtime FOR DIST OF MSTAR
@@ -994,7 +1115,7 @@ def main():
         assert np.isclose(time_res, time_res_float_from_str, atol=time_res/100)
 
 
-        # create BACKWARD integrator
+        # create FORWARD integrator
         t_end = env.lookbacktime - t_length if t_length > 0. else 0.
 
         Integrator = sgm.FTI(
@@ -1005,12 +1126,12 @@ def main():
             t_end=t_end
         )
 
-        # run the BACKWARD integrator
+        # run the FORWARD integrator
         # wtd = 1
         print("Starting integration")
         Integrator.integrate(
             wtd=wtd,
-            outdir=out_dir / f"{use_as_ICs}_{n_gal}gals_from_z{z}_to_z0_dt{time_res:.0e}_wtd{wtd}_mhalo_sigma{mhalo_sigma:.3f}_mstar{mstar_min}-{mstar_max}",
+            outdir=out_dir / f"{use_as_ICs}_{n_gal}gals_from_z{z}_to_z0_dt{time_res:.0e}_wtd{wtd}_sMIR_scaling_basefactor{sMIR_scaling_basefactor}_fluctuation_period{0.5:.3f}_mstar{mstar_min}-{mstar_max}",
             single_snapshots=False
         )
 
