@@ -621,7 +621,7 @@ def main():
             ax_ur.scatter(mstar_log, uRandDraw, label=f'Offset in fluctuation (in units of period), N={n_gal}')
 
             ax_ur.set_xlabel(r'log $M_\mathrm{star}$ [$M_\odot$]')
-            ax_ur.set_ylabel(r'log $M_\mathrm{halo}$ [$M_\odot$]')
+            ax_ur.set_ylabel(r'Offset of periodic fluctuation [0.5 Gyr]')
             ax_ur.tick_params(axis='both', which='both', direction='in', bottom=True, top=True, left=True, right=True)
             ax_ur.legend()
 
