@@ -1128,10 +1128,23 @@ def main():
 
         # run the FORWARD integrator
         # wtd = 1
+
+
+        # fancy output directory names dep. on which mode / data is used – NOT COMPLETE to start with
+        if use_as_ICs.casefold() == "GMS_GAUSS".casefold():
+            dir_name = f"{use_as_ICs}_from_z{z}_to_z0_dt{time_res:.0e}_wtd{wtd}_sigma{sfr_sigma:.3f}_sMIR_scaling_basefactor{sMIR_scaling_basefactor}"
+        elif use_as_ICs.casefold() == "GMS_MHALO_POPULATION".casefold():
+            dir_name = f"{use_as_ICs}_{n_gal}gals_from_z{z}_to_z0_dt{time_res:.0e}_wtd{wtd}_mhalo_sigma{mhalo_sigma:.3f}_mstar{mstar_min}-{mstar_max}"
+        elif use_as_ICs.casefold() == "GMS_PERIODIC_FLUCTUATIONS".casefold():
+            dir_name = f"{use_as_ICs}_{n_gal}gals_from_z{z}_to_z0_dt{time_res:.0e}_wtd{wtd}_sMIR_scaling_basefactor{sMIR_scaling_basefactor}_fluctuation_period{0.5:.3f}_mstar{mstar_min}-{mstar_max}"
+        else:  # catch all cases that are not specified – they get a fairly general naming without distinguishing parameters mentioned
+            dir_name = f"{use_as_ICs}_from_z{z}_to_z0_dt{time_res:.0e}_wtd{wtd}"
+
+
         print("Starting integration")
         Integrator.integrate(
             wtd=wtd,
-            outdir=out_dir / f"{use_as_ICs}_{n_gal}gals_from_z{z}_to_z0_dt{time_res:.0e}_wtd{wtd}_sMIR_scaling_basefactor{sMIR_scaling_basefactor}_fluctuation_period{0.5:.3f}_mstar{mstar_min}-{mstar_max}",
+            outdir=out_dir / dir_name,
             single_snapshots=False
         )
 
