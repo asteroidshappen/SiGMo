@@ -405,7 +405,7 @@ class Halo(AstroObject):
     age : float, optional
         The current age of the system in Gyrs (default 0.)
     BDR : float, optional
-        The ratio of (gaseous) baryonic to dark matter entering the halo (default 0.2)
+        The ratio of (gaseous) baryonic to dark matter entering the halo (default 0.15)
     DCR : float, optional
         The dark matter mass change rate (accretion) of the halo (default 0.)
     < fgal : float, optional
