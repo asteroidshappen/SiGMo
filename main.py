@@ -296,6 +296,12 @@ def main():
     mhalo = None
     sMIR_scaling_basefactor = None
 
+    # set uRandDraw to None to it can be calcualted at different time in the code if necessary, depending on case
+    uRandDraw = None
+
+    # initiate the random number generator (CAUTION: might be re-initiated due to some legacy code in some of the "cases" below!)
+    rng = np.random.default_rng(12345)
+
     # intial values for Galaxy properties
     if use_as_ICs.casefold() == "SDSS".casefold():  # SDSS
         mstar = 10**mstar_and_SFR[:, 0]
@@ -758,7 +764,7 @@ def main():
     IC_halo_sMIR_scaling = sgm.IC.single_param('sMIR_scaling', sMIR_scaling)
     IC_halo_sMIR_scaling_basefactor = sgm.IC.single_param('sMIR_scaling_basefactor', np.array([sMIR_scaling_basefactor] * len(mstar)))
     IC_halo_sMIR_scaling_updater = sgm.IC.single_param('sMIR_scaling_updater', sMIR_scaling_updater)
-    IC_halo_uRandDraw = sgm.IC.single_param('uRandDraw', uRandDraw)
+    IC_halo_uRandDraw = sgm.IC.single_param('uRandDraw', uRandDraw if uRandDraw is not None else rng.uniform(low=0., high=1., size=n_gal))
 
     # Environment IC
     IC_env_zstart = sgm.IC.single_param('zstart', [z])  # can also use 'lookbacktime' (Gyrs) instead of zstart
