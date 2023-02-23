@@ -1142,6 +1142,7 @@ class Galaxy(AstroObject):
         # update the lookbacktime and redshift (z) of the galaxy to the halo's values
         self.lookbacktime = self.halo.lookbacktime
         self.z = self.halo.z
+        self.age += timestep
 
         # update the time-variable quantities involved, in this case
         # GAR (and through it MIR and through the latter sMIR)
