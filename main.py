@@ -352,7 +352,7 @@ def main():
         # input
         try:
             mstar_min = float(input(f"Lowest stellar mass of the galaxies: (log(mstar/M☉), default: 6)") or 6.)
-            mstar_max = float(input(f"Highest stellar mass of the galaxies: (log(mstar/M☉), default: 10)") or 10.)
+            mstar_max = float(input(f"Highest stellar mass of the galaxies: (log(mstar/M☉), default: 9)") or 9.)
             n_gal = int(input(f"Number of galaxies between "
                                 f"log(mstar/M☉) = {mstar_min} to {mstar_max}: (default: 100)") or 100)
             z = float(input(f"Redshift of the GMS: (default: 2)") or 2.)
@@ -638,6 +638,12 @@ def main():
         raise ValueError
     else:
         raise TypeError
+
+
+
+    # temporarily set SFE to 1 (in Gyr⁻¹)
+    SFE = np.array([1] * n_gal)   # this could/should lead to discontinuities at the beginning of the run
+
 
 
     # in case it wasn't set
@@ -1138,7 +1144,7 @@ def main():
 
         # fancy output directory names dep. on which mode / data is used – NOT COMPLETE to start with
         if use_as_ICs.casefold() == "GMS_GAUSS".casefold():
-            dir_name = f"{use_as_ICs}_from_z{z}_to_z0_dt{time_res:.0e}_wtd{wtd}_sigma{sfr_sigma:.3f}_sMIR_scaling_basefactor{sMIR_scaling_basefactor}"
+            dir_name = f"{use_as_ICs}_{n_gal}gals_from_z{z}_to_z0_dt{time_res:.0e}_wtd{wtd}_sigma{sfr_sigma:.3f}_sMIR_scaling_basefactor{sMIR_scaling_basefactor}"
         elif use_as_ICs.casefold() == "GMS_MHALO_POPULATION".casefold():
             dir_name = f"{use_as_ICs}_{n_gal}gals_from_z{z}_to_z0_dt{time_res:.0e}_wtd{wtd}_mhalo_sigma{mhalo_sigma:.3f}_mstar{mstar_min}-{mstar_max}"
         elif use_as_ICs.casefold() == "GMS_PERIODIC_FLUCTUATIONS".casefold():
