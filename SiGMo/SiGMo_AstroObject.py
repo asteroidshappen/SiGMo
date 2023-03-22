@@ -338,6 +338,7 @@ class Environment(AstroObject):
 
         # make the time step in lookbacktime, then convert to z as well
         self.lookbacktime -= timestep
+        self.age += timestep
         # self.z = z_at_value(cosmo.age, cosmo.age(0) - self.lookbacktime * u.Gyr)  # Gyr HARDCODED AGAIN!
         try:
             self.z = z_at_value(cosmo.age, cosmo.age(0) - self.lookbacktime * u.Gyr)  # Gyr HARDCODED AGAIN!
@@ -548,6 +549,7 @@ class Halo(AstroObject):
         # take lookbacktime and z (redshift) from Environment the Halo belongs to
         self.lookbacktime = self.env.lookbacktime
         self.z = self.env.z
+        self.age += timestep
 
         # update the time-variable quantities involved, in this case
         # MIR and through (and somewhat before) it sMIR
@@ -1140,6 +1142,7 @@ class Galaxy(AstroObject):
         # update the lookbacktime and redshift (z) of the galaxy to the halo's values
         self.lookbacktime = self.halo.lookbacktime
         self.z = self.halo.z
+        self.age += timestep
 
         # update the time-variable quantities involved, in this case
         # GAR (and through it MIR and through the latter sMIR)
@@ -1186,6 +1189,7 @@ class Galaxy(AstroObject):
         # update the lookbacktime and redshift (z) of the galaxy to the halo's values
         self.lookbacktime = self.halo.lookbacktime
         self.z = self.halo.z
+        self.age += timestep
 
         # update the time-variable quantities involved, in this case
         # GAR (and through it MIR and through the latter sMIR)

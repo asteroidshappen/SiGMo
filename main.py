@@ -296,6 +296,12 @@ def main():
     mhalo = None
     sMIR_scaling_basefactor = None
 
+    # set uRandDraw to None to it can be calcualted at different time in the code if necessary, depending on case
+    uRandDraw = None
+
+    # initiate the random number generator (CAUTION: might be re-initiated due to some legacy code in some of the "cases" below!)
+    rng = np.random.default_rng(12345)
+
     # intial values for Galaxy properties
     if use_as_ICs.casefold() == "SDSS".casefold():  # SDSS
         mstar = 10**mstar_and_SFR[:, 0]
@@ -346,7 +352,7 @@ def main():
         # input
         try:
             mstar_min = float(input(f"Lowest stellar mass of the galaxies: (log(mstar/M☉), default: 6)") or 6.)
-            mstar_max = float(input(f"Highest stellar mass of the galaxies: (log(mstar/M☉), default: 10)") or 10.)
+            mstar_max = float(input(f"Highest stellar mass of the galaxies: (log(mstar/M☉), default: 9)") or 9.)
             n_gal = int(input(f"Number of galaxies between "
                                 f"log(mstar/M☉) = {mstar_min} to {mstar_max}: (default: 100)") or 100)
             z = float(input(f"Redshift of the GMS: (default: 2)") or 2.)
@@ -634,6 +640,12 @@ def main():
         raise TypeError
 
 
+
+    # temporarily set SFE to 1 (in Gyr⁻¹)
+    SFE = np.array([1] * n_gal)   # this could/should lead to discontinuities at the beginning of the run
+
+
+
     # in case it wasn't set
     sMIR_scaling_basefactor = 1 if sMIR_scaling_basefactor is None else sMIR_scaling_basefactor
 
@@ -758,7 +770,7 @@ def main():
     IC_halo_sMIR_scaling = sgm.IC.single_param('sMIR_scaling', sMIR_scaling)
     IC_halo_sMIR_scaling_basefactor = sgm.IC.single_param('sMIR_scaling_basefactor', np.array([sMIR_scaling_basefactor] * len(mstar)))
     IC_halo_sMIR_scaling_updater = sgm.IC.single_param('sMIR_scaling_updater', sMIR_scaling_updater)
-    IC_halo_uRandDraw = sgm.IC.single_param('uRandDraw', uRandDraw)
+    IC_halo_uRandDraw = sgm.IC.single_param('uRandDraw', uRandDraw if uRandDraw is not None else rng.uniform(low=0., high=1., size=n_gal))
 
     # Environment IC
     IC_env_zstart = sgm.IC.single_param('zstart', [z])  # can also use 'lookbacktime' (Gyrs) instead of zstart
@@ -1128,10 +1140,23 @@ def main():
 
         # run the FORWARD integrator
         # wtd = 1
+
+
+        # fancy output directory names dep. on which mode / data is used – NOT COMPLETE to start with
+        if use_as_ICs.casefold() == "GMS_GAUSS".casefold():
+            dir_name = f"{use_as_ICs}_{n_gal}gals_from_z{z}_to_z0_dt{time_res:.0e}_wtd{wtd}_sigma{sfr_sigma:.3f}_sMIR_scaling_basefactor{sMIR_scaling_basefactor}"
+        elif use_as_ICs.casefold() == "GMS_MHALO_POPULATION".casefold():
+            dir_name = f"{use_as_ICs}_{n_gal}gals_from_z{z}_to_z0_dt{time_res:.0e}_wtd{wtd}_mhalo_sigma{mhalo_sigma:.3f}_mstar{mstar_min}-{mstar_max}"
+        elif use_as_ICs.casefold() == "GMS_PERIODIC_FLUCTUATIONS".casefold():
+            dir_name = f"{use_as_ICs}_{n_gal}gals_from_z{z}_to_z0_dt{time_res:.0e}_wtd{wtd}_sMIR_scaling_basefactor{sMIR_scaling_basefactor}_fluctuation_period{0.5:.3f}_mstar{mstar_min}-{mstar_max}"
+        else:  # catch all cases that are not specified – they get a fairly general naming without distinguishing parameters mentioned
+            dir_name = f"{use_as_ICs}_from_z{z}_to_z0_dt{time_res:.0e}_wtd{wtd}"
+
+
         print("Starting integration")
         Integrator.integrate(
             wtd=wtd,
-            outdir=out_dir / f"{use_as_ICs}_{n_gal}gals_from_z{z}_to_z0_dt{time_res:.0e}_wtd{wtd}_sMIR_scaling_basefactor{sMIR_scaling_basefactor}_fluctuation_period{0.5:.3f}_mstar{mstar_min}-{mstar_max}",
+            outdir=out_dir / dir_name,
             single_snapshots=False
         )
 
