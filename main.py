@@ -1153,11 +1153,18 @@ def main():
             dir_name = f"{use_as_ICs}_from_z{z}_to_z0_dt{time_res:.0e}_wtd{wtd}"
 
 
+        # define event list for scripted events
+        # _i, _obj_type, _quantity_name, _method, _value
+        _event_list = [
+            [500, "gal", "mgas", "set", 0.]
+        ]
+
         print("Starting integration")
         Integrator.integrate(
             wtd=wtd,
             outdir=out_dir / dir_name,
-            single_snapshots=False
+            single_snapshots=False,
+            event_list=_event_list
         )
 
 
