@@ -176,6 +176,7 @@ class FTI(Integrator):
                 while t == event_list[0][0]:
                     # take and remove first element of the envent_list. The order of items in the 2-d nested list is:
                     # number of timestep, Environment/Halo/Galaxy, attribute name, method of modif., value of modif.
+                    _last_i = True if len(event_list) == 1 else False
                     _i, _obj_type, _quantity_name, _method, _value = event_list.pop(0)
 
                     # grab the right object (which will in turn have the quantity
@@ -204,6 +205,11 @@ class FTI(Integrator):
                         setattr(_obj, _quantity_name, _quantity - _value)
                     else:
                         raise ValueError('a method for modifying by event_list does not exist or was selected wrong')
+
+                    # set event_list to None if event_list was used up, to prevent out-of-range index evaluation
+                    if _last_i:
+                        event_list = None   # skip this whole section entirely (due to outer if statement)
+                        break
 
             # only go through snapshot creation if they will be written to disk
             if (wtd > 0) and ((t % wtd == 0) or (t == n_steps)):
