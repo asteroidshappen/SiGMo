@@ -1156,7 +1156,16 @@ def main():
         # define event list for scripted events
         # _i, _obj_type, _quantity_name, _method, _value
         _event_list = [
-            [500, "gal", "mgas", "set", 0.]
+            [0, "gal", "mgas", "set", 0.],
+            [1000, "gal", "mgas", "set", 0.],
+            [2000, "gal", "mgas", "set", 1*mgas],
+            [3000, "gal", "mgas", "set", 0.],
+            [4000, "gal", "mgas", "set", 2*mgas],
+            [5000, "gal", "mgas", "set", 0.],
+            [6000, "gal", "mgas", "set", 3*mgas],
+            [7000, "gal", "mgas", "set", 0.],
+            [8000, "gal", "mgas", "set", 4*mgas],
+            [9000, "gal", "mgas", "set", 0.],
         ]
 
         print("Starting integration")
