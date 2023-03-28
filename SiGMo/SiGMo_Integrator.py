@@ -195,16 +195,24 @@ class FTI(Integrator):
                     # now do the modifications - careful, there's different scenarios
                     if _method.casefold() == 'set'.casefold():
                         setattr(_obj, _quantity_name, _value)
+                        _preposition = "to"
                     elif _method.casefold() == 'multiply'.casefold():
                         setattr(_obj, _quantity_name, _quantity * _value)
+                        _preposition = "by"
                     elif _method.casefold() == 'divide'.casefold():
                         setattr(_obj, _quantity_name, _quantity / _value)
+                        _preposition = "by"
                     elif _method.casefold() == 'add'.casefold():
                         setattr(_obj, _quantity_name, _quantity + _value)
+                        _preposition = "to"
                     elif _method.casefold() == 'subtract'.casefold():
                         setattr(_obj, _quantity_name, _quantity - _value)
+                        _preposition = "by"
                     else:
                         raise ValueError('a method for modifying by event_list does not exist or was selected wrong')
+
+                    # alert user to scripted event details
+                    print(f"Event at timestep {_i}: {_method} {_obj_type}'s {_quantity_name} {_preposition} {_value}")
 
                     # set event_list to None if event_list was used up, to prevent out-of-range index evaluation
                     if _last_i:
