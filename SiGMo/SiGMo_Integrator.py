@@ -135,8 +135,10 @@ class FTI(Integrator):
         """
         # avoid repeated lookups
         env = self.env
-        halo = env.halos[0]   # only works for the 1st halo (HARDCODED!)
-        gal = halo.galaxies[0]   # only works for the 1st galaxy (HARDCODED!)
+        # halo = env.halos[0]   # only works for the 1st halo (HARDCODED!)
+        halos = env.halos
+        # gal = halo.galaxies[0]   # only works for the 1st galaxy (HARDCODED!)
+        galaxies = [_halo.galaxies[0] for _halo in halos]   # only works for the 1st galaxy (HARDCODED!)
         evolve_method = self.evolve_method
         dt = self.dt
         n_steps = self.n_steps
@@ -181,35 +183,37 @@ class FTI(Integrator):
 
                     # grab the right object (which will in turn have the quantity
                     if _obj_type.casefold() == "env".casefold():
-                        _obj = env
+                        _obj_l = [env]
                     elif _obj_type.casefold() == "halo".casefold():
-                        _obj = halo
+                        _obj_l = halos
                     elif _obj_type.casefold() == "gal".casefold():
-                        _obj = gal
+                        _obj_l = galaxies
                     else:
                         raise ValueError('an object to be modified by event_list does not exist or is called wrong')
 
-                    # get the property, it should be used in all but one scenario
-                    _quantity = getattr(_obj, _quantity_name)
+                    # do the adjustments for all objects in the respective list (env, halo or gal)
+                    for _obj in _obj_l:
+                        # get the property, it should be used in all but one scenario
+                        _quantity = getattr(_obj, _quantity_name)
 
-                    # now do the modifications - careful, there's different scenarios
-                    if _method.casefold() == 'set'.casefold():
-                        setattr(_obj, _quantity_name, _value)
-                        _preposition = "to"
-                    elif _method.casefold() == 'multiply'.casefold():
-                        setattr(_obj, _quantity_name, _quantity * _value)
-                        _preposition = "by"
-                    elif _method.casefold() == 'divide'.casefold():
-                        setattr(_obj, _quantity_name, _quantity / _value)
-                        _preposition = "by"
-                    elif _method.casefold() == 'add'.casefold():
-                        setattr(_obj, _quantity_name, _quantity + _value)
-                        _preposition = "to"
-                    elif _method.casefold() == 'subtract'.casefold():
-                        setattr(_obj, _quantity_name, _quantity - _value)
-                        _preposition = "by"
-                    else:
-                        raise ValueError('a method for modifying by event_list does not exist or was selected wrong')
+                        # now do the modifications - careful, there's different scenarios
+                        if _method.casefold() == 'set'.casefold():
+                            setattr(_obj, _quantity_name, _value)
+                            _preposition = "to"
+                        elif _method.casefold() == 'multiply'.casefold():
+                            setattr(_obj, _quantity_name, _quantity * _value)
+                            _preposition = "by"
+                        elif _method.casefold() == 'divide'.casefold():
+                            setattr(_obj, _quantity_name, _quantity / _value)
+                            _preposition = "by"
+                        elif _method.casefold() == 'add'.casefold():
+                            setattr(_obj, _quantity_name, _quantity + _value)
+                            _preposition = "to"
+                        elif _method.casefold() == 'subtract'.casefold():
+                            setattr(_obj, _quantity_name, _quantity - _value)
+                            _preposition = "by"
+                        else:
+                            raise ValueError('a method for modifying by event_list does not exist or was selected wrong')
 
                     # alert user to scripted event details
                     print(f"Event at timestep {_i}: {_method} {_obj_type}'s {_quantity_name} {_preposition} {_value}")
