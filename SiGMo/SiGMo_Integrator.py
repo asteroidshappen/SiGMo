@@ -167,7 +167,7 @@ class FTI(Integrator):
         env.make_and_write_all_snapshots(i_write, n_steps, outdir, single_snapshots=single_snapshots)
 
         # loop over time
-        for t in trange(1, n_steps):
+        for t in trange(1, n_steps+1):
             # evolve the Environment and everything in it (env->halos->galaxies)
             evolve_method(timestep=dt)
 
