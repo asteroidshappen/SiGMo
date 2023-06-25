@@ -518,6 +518,30 @@ def sMIR_scaling_updater_deltaGMS(halo):
     return sMIR_scaling
 
 
+def periodic_rectangle_function(
+        x,
+        period = 2 * np.pi,  # in Gyr (code-unit of time)
+        top = 1.,
+        bottom = -1.
+):
+    """
+    Periodic function that alternates between a top and a bottom value. Its
+    period, top and bottom value are defined to mimic np.sin
+
+    :param x: angle / x position
+    :param period: period of a full circle through top and bottom
+    :param top: top value (of the plateau)
+    :param bottom: bottom value (of the value)
+    :return: the value of the function at position x
+    """
+    x = x % period
+    if x < 0.5 * period:
+        y = top
+    else:
+        y = bottom
+    return y
+
+
 def sMIR_scaling_updater_periodicFluctuation(
         halo,
         periodicFunct = np.sin,
