@@ -122,7 +122,8 @@ class FTI(Integrator):
     def integrate(self,
                   wtd=1,
                   outdir='outputs/_tmp/',
-                  single_snapshots: bool = True
+                  single_snapshots: bool = True,
+                  event_list = None
                   ):
         """
         The core integrator/iterator loop that includes writing Snapshot files to disk
@@ -134,6 +135,10 @@ class FTI(Integrator):
         """
         # avoid repeated lookups
         env = self.env
+        # halo = env.halos[0]   # only works for the 1st halo (HARDCODED!)
+        halos = env.halos
+        # gal = halo.galaxies[0]   # only works for the 1st galaxy (HARDCODED!)
+        galaxies = [_halo.galaxies[0] for _halo in halos]   # only works for the 1st galaxy (HARDCODED!)
         evolve_method = self.evolve_method
         dt = self.dt
         n_steps = self.n_steps
@@ -164,9 +169,59 @@ class FTI(Integrator):
         env.make_and_write_all_snapshots(i_write, n_steps, outdir, single_snapshots=single_snapshots)
 
         # loop over time
-        for t in trange(1, n_steps):
+        for t in trange(1, n_steps+1):
             # evolve the Environment and everything in it (env->halos->galaxies)
             evolve_method(timestep=dt)
+
+            # check for scripted event
+            if event_list is not None:
+                while t == event_list[0][0]:
+                    # take and remove first element of the envent_list. The order of items in the 2-d nested list is:
+                    # number of timestep, Environment/Halo/Galaxy, attribute name, method of modif., value of modif.
+                    _last_i = True if len(event_list) == 1 else False
+                    _i, _obj_type, _quantity_name, _method, _value = event_list.pop(0)
+
+                    # grab the right object (which will in turn have the quantity
+                    if _obj_type.casefold() == "env".casefold():
+                        _obj_l = [env]
+                    elif _obj_type.casefold() == "halo".casefold():
+                        _obj_l = halos
+                    elif _obj_type.casefold() == "gal".casefold():
+                        _obj_l = galaxies
+                    else:
+                        raise ValueError('an object to be modified by event_list does not exist or is called wrong')
+
+                    # do the adjustments for all objects in the respective list (env, halo or gal)
+                    for _obj in _obj_l:
+                        # get the property, it should be used in all but one scenario
+                        _quantity = getattr(_obj, _quantity_name)
+
+                        # now do the modifications - careful, there's different scenarios
+                        if _method.casefold() == 'set'.casefold():
+                            setattr(_obj, _quantity_name, _value)
+                            _preposition = "to"
+                        elif _method.casefold() == 'multiply'.casefold():
+                            setattr(_obj, _quantity_name, _quantity * _value)
+                            _preposition = "by"
+                        elif _method.casefold() == 'divide'.casefold():
+                            setattr(_obj, _quantity_name, _quantity / _value)
+                            _preposition = "by"
+                        elif _method.casefold() == 'add'.casefold():
+                            setattr(_obj, _quantity_name, _quantity + _value)
+                            _preposition = "to"
+                        elif _method.casefold() == 'subtract'.casefold():
+                            setattr(_obj, _quantity_name, _quantity - _value)
+                            _preposition = "by"
+                        else:
+                            raise ValueError('a method for modifying by event_list does not exist or was selected wrong')
+
+                    # alert user to scripted event details
+                    print(f"Event at timestep {_i}: {_method} {_obj_type}'s {_quantity_name} {_preposition} {_value}")
+
+                    # set event_list to None if event_list was used up, to prevent out-of-range index evaluation
+                    if _last_i:
+                        event_list = None   # skip this whole section entirely (due to outer if statement)
+                        break
 
             # only go through snapshot creation if they will be written to disk
             if (wtd > 0) and ((t % wtd == 0) or (t == n_steps)):
