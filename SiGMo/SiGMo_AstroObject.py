@@ -929,23 +929,31 @@ class Galaxy(AstroObject):
         The halo object the galaxy is associated with/is located in
     age : float, optional
         The current age of the system in Gyrs (default None)
-    ^ BDR : float, optional
-        The ratio of (gaseous) baryonic to dark matter entering the halo (default 0.2)
+    [BDR : float, optional
+        The ratio of (gaseous) baryonic to dark matter entering the halo (default 0.2)] moved to Halo object
     fgal : float, optional
         The fraction of baryons that enter the halo and make it all the way down
         into the "regulator system" to participate in star formation etc (default 0.1)
+    fgas: float, optional
+        Gas mass fraction following Lilly+13 - not usually used anymore (default None)
+    fout: float, optional
+        Outflow mass fraction following Lilly+13 - not usually used anymore (default None)
+    fstar: float, optional
+        Stellar mass fraction following Lilly+13 - not usually used anymore (default None)
     GAR : float, optional
         The gas accretion rate of the galaxy (default 0.)
     GCR : float, optional
         The change rate ∂/∂t in gas mass content of the galaxy (default 0.)
-    ^ HLF : float, optional
+    [HLF : float, optional
         The halo loss fraction - fraction of baryons that get expelled by feedback
-        not only from the galaxy but also from the halo altogether (default 0.1)
+        not only from the galaxy but also from the halo altogether (default 0.1)] moved to Halo object
     IRF: float, optional
         The fraction of gas being converted to stars that is promptly,
         here instantly, returned to the gas reservoir (default 0.4)
-    ^ MIR : float, optional
-        The mass increase rate (accretion) of the DM halo with mass mhalo (default 0.)
+    lookbacktime: float, optional
+        The current cosmic lookback time (default None)
+    [MIR : float, optional
+        The mass increase rate (accretion) of the DM halo with mass mhalo (default 0.)] moved to Halo object
     MLF : float, optional
         The mass-loading factor coupling SFR and mass loss (default 0.1)
     MLR : float, optional
@@ -954,26 +962,26 @@ class Galaxy(AstroObject):
         The total mass accreted onto the galaxy (default 0.)
     mgas : float, optional
         The gas mass content of the galaxy (default 1.e10)
-    ^ mhalo : float, optional
-        The total mass of the halo that the galaxy resides in (default 1.e12)
+    [mhalo : float, optional
+        The total mass of the halo that the galaxy resides in (default 1.e12)] moved to Halo object
     mstar : float, optional
         The stellar mass content of the galaxy (default 1.e9)
     mout: float, optional
         The mass lost from the system due to massloss (default 0.)
     name : str, optional
         The name of the galaxy (default 'Test_Gal')
-    previous : dict, optional
+    [previous : dict, optional
         Stores the previous state of all galaxy properties to allow easy
         computation of delta_YYY change properties. Gets overwritten at
-        the beginning of any XXX_evolve() method (default None)
+        the beginning of any XXX_evolve() method (default None)] gets set automatically later
     rsSFR : float, optional
         The reduced specific SFR; excludes instant.returned gas (default 0.)
     SFE : float, optional
-        The star formation efficiency (default 0.01)
+        The star formation efficiency (default 1.)
     SFR : float, optional
         The star formation rate in the galaxy (default 0.)
-    ^ sMIR : float, optional
-        The specific mass increase rate (accretion) of the DM halo (default 0.)
+    [sMIR : float, optional
+        The specific mass increase rate (accretion) of the DM halo (default 0.)] moved to Halo object
     sSFR: float, optional
         The actual specific star formation rate; this sSFR does not account
         for reduction by the inst. return to the gas reservoir (default 0.)
