@@ -290,14 +290,6 @@ class Environment(AstroObject):
         Creates Halo object and adds it to halos list
     evolve(mode: str = "intuitive", timestep: float = 1.e-3, runparallel: bool = False)
         Evolve Environment and all halos/galaxies either intuitively or per Lilly+13, Eq.12a-14a, acc. to 'mode'
-
-
-    create_Galaxy(galaxy_kwargs: dict = None)
-        Creates Galaxy object and adds it to galaxies list
-    reference_evolve(timestep: float = 1.e-3)
-        Evolves the environment and all galaxies acc. to Lilly+13, Eq.12a,13a,14a
-    intuitive_evolve(timestep: float = 1.e-3)
-        Evolves the Environment and all galaxies in it in an 'intuitive' fashion
     """
 
     def __init__(self,
@@ -531,15 +523,6 @@ class Halo(AstroObject):
     compute_sMIR_scaling(updater_function)
         Computes the updated sMIR_scaling using the function handed in
         and the current environment instance
-
-
-
-    create_Galaxy(galaxy_kwargs: dict = None)
-        Creates Galaxy object and adds it to galaxies list
-    reference_evolve(timestep: float = 1.e-3)
-        Evolves the environment and all galaxies acc. to Lilly+13, Eq.12a,13a,14a
-    intuitive_evolve(timestep: float = 1.e-3)
-        Evolves the Environment and all galaxies in it in an 'intuitive' fashion
     """
 
     def __init__(self,
