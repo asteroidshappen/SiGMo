@@ -286,6 +286,12 @@ class Environment(AstroObject):
 
     Methods
     -------
+    create_Halo(*halo_args, **halo_kwargs)
+        Creates Halo object and adds it to halos list
+    evolve(mode: str = "intuitive", timestep: float = 1.e-3, runparallel: bool = False)
+        Evolve Environment and all halos/galaxies either intuitively or per Lilly+13, Eq.12a-14a, acc. to 'mode'
+
+
     create_Galaxy(galaxy_kwargs: dict = None)
         Creates Galaxy object and adds it to galaxies list
     reference_evolve(timestep: float = 1.e-3)
