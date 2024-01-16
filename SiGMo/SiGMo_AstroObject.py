@@ -1006,7 +1006,7 @@ class Galaxy(AstroObject):
                  fout: float = None,
                  fstar: float = None,
                  GAR: float = 0.,  # THIS NEEDS TO BE CHANGED TO None AND THEN PROPERLY SET FURTHER DOWN
-                 gasmassfraction: float = 1.,
+                 # gasmassfraction: float = 1.,
                  GCR: float = 0.,  # THIS NEEDS TO BE CHANGED TO None AND THEN PROPERLY SET FURTHER DOWN
                  # HLF: float = 0.1,
                  IRF: float = 0.4,
