@@ -990,18 +990,122 @@ class Galaxy(AstroObject):
 
     Methods
     -------
-    compute_fstar_beforehand(self) -> float:
-        Fraction of incoming gas converted to stars,
-        based on Eq. 12a from Lilly+13, for ideal regulator
-    compute_fout_beforehand(self) -> float:
-        Fraction of incoming gas expelled again from the galaxy,
-        based on Eq. 13a from Lilly+13, for ideal regulator
-    compute_fgas_beforehand(self) -> float:
-        Fraction of incoming gas added to the galaxy gas reservoir,
-        based on Eq. 14a from Lilly+13, for ideal regulator
+    > methods for burn-in:
+    with_burnin(cls, cycle_steps: int = 5, cycles_max: int = 1e6, check_attr: dict = None, div_aim: float = 1.e-3,
+        div_delta_aim: float = 1.e-4, div_max: float = 1.e3, fixed_attr: dict = None, vartime: float = 1.e-3, *args,
+        **kwargs)
+        Allows for 'burn-in' of select galaxy properties and for others to be kept fixed. Aim: (quasi-)equilibrium
+    attr_to_dict(attr = None, default_attr = None)
+        Make dict from list or dict of desired or default attributes using object attribute values
+    check_for_convstabdiv(attr_to_check: dict, div_aim = 1.e-3, div_delta_aim = None, div_max = None, div_previous = None)
+        Check for convergence, stability, divergence in attributes that are specified
+    reset_attributes(attr_to_reset: dict)
+        Resets attributes from dict. Default resets mhalo,mgas,mout to value of prev. timestep, keeping them fixed
+
+    > methods for time-integration:
+    evolve(mode: str = "intuitive", timestep: float = 1.e-3)
+        Evolves the galaxy by one 'timestep' according to different prescriptions specified in 'mode'
+    intuitive_evolve(timestep: float = 1.e-3)
+        Evolves the galaxy by one timestep intuitively, *without* using
+        sSFR(mstar, z) as time-dependent input (the latter is what Lilly+13 do)
     reference_evolve(timestep: float = 1.e-3)
         Evolves the galaxy by one timestep according to Lilly+13 Eq.12a,13a,14a,
         ideal regulator
+
+    > methods for updating physical quantities
+    update_GAR(MIR: float = None, *args, **kwargs)
+        Updates the (absolute) gas accretion rate of the galaxy
+        and calls compute_GAR() to get the new value. If the overall
+        halo mass increase rate (MIR) is not provided, it also calls
+        update_MIR() to compute the current value of that.
+    compute_GAR(MIR: float = None, BDR: float = None, fgal: float = None)
+        Compute the absolute gas accretion rate of the galaxy
+        from the overall halo mass increase rate (MIR) as well as
+        the baryon-dark matter ratio (BDR) and the fraction of
+        infalling gas that makes it deep enough into the galaxy
+        to participate in star formation etc.
+    update_GCR(mode:str = "from fgas", *args, **kwargs)
+        Update the gas change rate of the reservoir either intuitively, or based on fractions like Lilly+13
+    compute_GCR_from_fgas(GAR: float = None, fgas: float = None)
+        Compute (reservoir) gas change rate from fractions in Lilly+13 ideal regulator
+    compute_GCR_from_GAR(GAR: float = None, IFR: float = None, MLR: float = None, SFR: float = None)
+        Compute (reservoir) gas change rate more 'intuitively' straight
+        from overall accretion of gas into the galaxy, minus the gas that is
+        expelled or turned into (long or short lived aka any kind of) stars.
+        [The instant return of gas from short lived stars is handled at the
+        level of the integration of mstar, mgas] this has been changed
+    update_macc(timestep: float, *args, **kwargs)
+        Update the total mass accreted onto the galaxy
+    compute_macc(timestep: float, GAR: float = None, macc: float = None)
+        Compute the new total mass accreted by the galaxy
+    update_mgas(timestep: float, *args, **kwargs)
+        Update the gas mass (in reservoir)
+    compute_mgas(timestep: float, GCR: float = None, mgas: float = None)
+        Compute the new gas mass (in reservoir) from GCR that already factors in a SFR reduced by (1 - IRF)
+    update_MLR(mode:str = "from fout", *args, **kwargs)
+        Update the mass loss rate, which is the rate of mass that gets ejected from the galaxy
+    compute_MLR_from_fout(GAR: float = None, fout: float = None)
+        Compute mass loss rate from fractions in Lilly+13 ideal regulator
+    compute_MLR_from_MLF(MLF: float = None, SFR: float = None)
+        Compute mass loss rate 'intuitively' from mass-loading factor
+        and star formation rate
+    update_mout(timestep: float, *args, **kwargs)
+        Update the total mass gas lost from the system up to this point
+    compute_mout(timestep: float, MLR: float = None, mout: float = None)
+        Compute the total gas mass lost from the system until now
+    update_mstar(timestep: float, mode: str = "from reduced SFR", *args, **kwargs)
+        Update current stellar mass according to the 'mode' keyword provided
+    compute_mstar_from_reduced_SFR(timestep: float, mstar: float = None, SFR: float = None)
+        Compute current stellar mass from SFR already reduced by (1 - IRF)
+    compute_mstar_from_unreduced_SFR(timestep: float, IRF: float = None, mstar: float = None, SFR: float = None)
+        Compute current stellar mass from SFR unreduced by (1 - IRF)
+    update_rsSFR(mode: str = 'empirical', *args, **kwargs)
+        Update the reduced specific star-formation rate
+    compute_rsSFR_empirical(mstar: float = None, z: float = None)
+        Computes the reduced specific star formation rate according to
+        Lilly et al. 2013, Eq. (2), for z < 2. and z > 2., respectively
+    compute_rsSFR_from_sSFR(IRF: float = None, sSFR:float = None)
+        Computes the reduced specific star formation rate from
+        the non-reduced, regular specific star formation rate
+    update_SFR(mode: str = 'from fstar', *args, **kwargs)
+        Compute and update SFR according to 'mode' keyword
+    compute_SFR_from_fstar(GAR: float = None, fstar: float = None)
+        Compute star formation rate from fractions in Lilly+13 ideal regulator
+    compute_SFR_from_SFE(mgas: float = None, SFE: float = None)
+        Compute star formation rate intuitively from star formation efficiency
+        and available gas
+    update_sSFR(mode: str = 'from rsSFR', rsSFR: float = None, *args, **kwargs)
+        Updates the actual, unreduced sSFR and, if not supplied, the (reduced) rsSFR too
+    compute_sSFR_from_rsSFR(rsSFR: float = None, IRF: float = None)
+        Computes the actual, unreduced sSFR from the rsSFR
+    compute_sSFR_from_SFR(mstar: float = None, SFR: float = None)
+        Computes the intuitive sSFR from SFR and mstar
+
+    > methods for updating fractions
+    update_fgas(mode: str = "beforehand", *args, **kwargs)
+        Update the fraction of gas accreted onto the galaxy that goes into the reservoir
+    compute_fgas_afterwards(delta_macc: float = None, delta_mgas: float = None)
+        Fraction of incoming gas added to the galaxy gas reservoir,
+        based on the mgas and macc increase
+    compute_fgas_beforehand(IRF: float = None, MLF: float = None, SFE: float = None, sSFR: float = None)
+        Fraction of incoming gas added to the galaxy gas reservoir,
+        based on Eq. 14a from Lilly+13, for ideal regulator (fres)
+    update_fstar(mode: str = "beforehand", *args, **kwargs)
+        Update the fraction of gas accreted onto the galaxy turned into long-lived stars
+    compute_fstar_afterwards(delta_macc: float = None, delta_mstar: float = None)
+        Fraction of incoming gas converted to (long lived) stars,
+        based on the mstar and macc increase
+    compute_fstar_beforehand(IRF: float = None, MLF: float = None, SFE: float = None, sSFR: float = None)
+        Fraction of incoming gas converted to stars,
+        based on Eq. 12a from Lilly+13, for ideal regulator
+    update_fout(mode: str = "beforehand", *args, **kwargs)
+        Update the fraction of gas accreted onto the galaxy expelled out of the galaxy again
+    compute_fout_afterwards(delta_macc: float = None, delta_mout: float = None)
+        Fraction of incoming gas expelled again from the galaxy,
+        based on the mout and macc increase
+    compute_fout_beforehand(IRF: float = None, MLF: float = None, SFE: float = None, sSFR: float = None)
+        Fraction of incoming gas expelled again from the galaxy,
+        based on Eq. 13a from Lilly+13, for ideal regulator
     """
 
     def __init__(self,
@@ -1304,7 +1408,7 @@ class Galaxy(AstroObject):
                          timestep: float = 1.e-3
                          ) -> 'Snapshot':
         """Evolves the galaxy by one timestep intuitively, *without* using
-        sSFR(mstar, z) as time-dependent input (like Lilly+13 do)"""
+        sSFR(mstar, z) as time-dependent input (the latter is what Lilly+13 do)"""
 
         # # THIS IS ONLY NEEDED FOR THE AFTERWARD CALCULATION OF FRACTIONS (similar to Lilly) – commented out
         # # store snapshot of previous state before anything gets changed
@@ -1350,6 +1454,13 @@ class Galaxy(AstroObject):
                mode: str = "intuitive",
                timestep: float = 1.e-3
                ) -> 'Snapshot':
+        """
+        Evolves the galaxy by one 'timestep' according to different prescriptions specified in 'mode'
+
+        :param mode: either 'intuitive' or 'reference', calls respective [...]_evolve method
+        :param timestep: length of timestep
+        :return: snapshot of the galaxy
+        """
         if mode == "reference":
             snp = self.reference_evolve(timestep=timestep)
         elif mode == "intuitive":
@@ -1602,6 +1713,7 @@ class Galaxy(AstroObject):
                    *args,
                    **kwargs
                    ) -> float:
+        """Update the gas change rate of the reservoir either intuitively, or based on fractions like Lilly+13"""
         if mode == "from fgas":
             self.GCR = self.compute_GCR_from_fgas(*args, **kwargs)
         elif mode == "from GAR":
@@ -1737,6 +1849,7 @@ class Galaxy(AstroObject):
                    *args,
                    **kwargs
                    ) -> float:
+        """Update the mass loss rate, which is the rate of mass that gets ejected from the galaxy"""
         if mode == "from fout":
             self.MLR = self.compute_MLR_from_fout(*args, **kwargs)
         elif mode == "from MLF":
@@ -1770,7 +1883,7 @@ class Galaxy(AstroObject):
 
     # mout
     def update_mout(self, timestep: float, *args, **kwargs) -> float:
-        """Update the mass gas lost from the system up to this point"""
+        """Update the total mass gas lost from the system up to this point"""
         self.mout = self.compute_mout(timestep=timestep, *args, **kwargs)
         return self.mout
 
@@ -1836,6 +1949,7 @@ class Galaxy(AstroObject):
                      *args,
                      **kwargs
                      ) -> float:
+        """Update the reduced specific star-formation rate"""
         if mode == 'empirical':
             self.rsSFR = self.compute_rsSFR_empirical(*args, **kwargs)
         elif mode == 'from sSFR':
