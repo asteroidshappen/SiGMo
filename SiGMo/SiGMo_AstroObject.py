@@ -245,6 +245,8 @@ class Environment(AstroObject):
         The current age of the system in Gyrs (default 0.)
     galaxies : list, optional
         List of all Galaxy objects in this environment (default None)
+    halos : list, optional
+        List of all Halo objects in this environment (default None)
     lookbacktime : float, optional
         The current cosmic lookback time (default None)
     mdm : float, optional
@@ -253,10 +255,12 @@ class Environment(AstroObject):
         The amount of gas available in the environment (default np.inf)
     name : str, optional
         The name of the galaxy (default 'Test_Env')
-    z : float, optional
-        The current redshift of the system (default None)
+    [previous: Snapshot, optional
+        A snapshot of the previous state (default None)] set automatically
+    [z : float, optional
+        The current redshift of the system (default None)] set automatically
     zstart : float, optional
-        The initial redshift of the system (default 6.)
+        The initial redshift of the system (default None)
 
     Methods
     -------
