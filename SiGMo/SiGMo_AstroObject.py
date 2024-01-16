@@ -435,55 +435,105 @@ class Halo(AstroObject):
 
     Attributes
     ----------
+    env : Environment
+        The instance of Environment this instance of Halo lives in
     age : float, optional
-        The current age of the system in Gyrs (default 0.)
+        The current age of the system in Gyrs (default None)
     BDR : float, optional
         The ratio of (gaseous) baryonic to dark matter entering the halo (default 0.15)
     DCR : float, optional
-        The dark matter mass change rate (accretion) of the halo (default 0.)
-    < fgal : float, optional
+        The dark matter mass change rate (accretion) of the halo (default None)
+    [fgal : float, optional
         The fraction of baryons that enter the halo and make it all the way down
-        into the "regulator system" to participate in star formation etc
+        into the "regulator system" to participate in star formation etc] deprecated
     galaxies : list, optional
         List of all Galaxy objects in this environment (default None)
     GCR: float, optional
-        The change rate ∂/∂t in gas mass content of the halo (default 0.)
+        The change rate ∂/∂t in gas mass content of the halo (default None)
     HLF : float, optional
         The halo loss fraction - fraction of baryons that get expelled by feedback
         not only from the galaxy but also from the halo altogether (default 0.1)
     lookbacktime : float, optional
         The current cosmic lookback time (default None)
     mdm : float, optional
-        The amount of dark matter available in the halo (default np.inf)
+        The amount of dark matter available in the halo (default None)
     mgas : float, optional
-        The amount of gas available in the environment (default np.inf)
+        The amount of gas available in the environment (default None)
     MIR : float, optional
-        The total mass increase rate (accretion) of the halo with mass mtot (default 0.)
+        The total mass increase rate (accretion) of the halo with mass mtot (default None)
     mtot : float, optional
-        The total mass of the halo that the galaxy resides in (default 1.e12)
+        The total mass of the halo that the galaxy resides in (default None)
     name : str, optional
         The name of the galaxy (default 'Test_Env')
     sMIR : float, optional
-        The specific mass increase rate (accretion) of the DM halo (default 0.)
+        The specific mass increase rate (accretion) of the DM halo (default None)
     sMIR_scaling : float, optional
         Artificial scaling (multiplicative increase or decrease) of the specific
         halo accretion rate, e.g. to explore increased accretion (default 1.)
     sMIR_scaling_basefactor : float, optional
-        Base factor that is used by the function referenced in sMIR_scaling_updater
+        Base factor that is used by the function referenced in sMIR_scaling_updater (default 1.)
     sMIR_scaling_updater : function, optional
         Function used to update the sMIR_scaling at every time step in the evolution.
         If sMIR_scaling_updater = None, no updating will be performed.
         If sMIR_scaling_updater is a function, it will be called, with only the
         current instance of the halo as an argument, from which all other information
         like redshift etc. needs to be derived (default None)
-    uRandDraw : constant drawn from a uniform random distribution, to be used for
+    uRandDraw : constant drawn from a uniform random distribution, to be used e.g. for unique offsets (default None)
     z : float, optional
         The current redshift of the system (default None)
-    zstart : float, optional
-        The initial redshift of the system (default 6.)
+    [zstart : float, optional
+        The initial redshift of the system (default 6.)] deprecated, now in Environment
 
     Methods
     -------
+    create_Galaxy(with_burnin=False, with_burnin_dict=None, *galaxy_args, **galaxy_kwargs)
+        Creates Galaxy object and adds it to galaxies list
+    evolve(mode: str = "intuitive", timestep: float = 1.e-3)
+        Evolve Halo and all galaxies either intuitively or per Lilly+13, Eq.12a-14a, acc. to 'mode'
+    update_DCR(*args, **kwargs)
+        Update the dark matter change rate using the compute_DCR() method
+    compute_DCR(MIR: float  = None)
+        Computes the dark matter change rate - should be made obsolete since MIR is that now
+    update_GCR(*args, **kwargs)
+        Update the gas mass change rate using the compute_GCR() method
+    compute_GCR(BDR: float = None, gal_fgal: list[float] = None, gal_MLR: list[float] = None, HLF: float = None,
+        MIR: float  = None)
+        Computes the gas mass change rate
+    update_mdm(timestep: float, *args, **kwargs)
+        Update the dark matter mass using the compute_mdm() method
+    compute_mdm(timestep: float, DCR: float = None, mdm: float = None)
+        Compute the dark matter mass
+    update_mgas(timestep: float, *args, **kwargs)
+        Update the gas mass using the compute_mgas() method
+    compute_mgas(timestep: float, gal_MLR: list[float] = None, GCR: float = None, mgas: float = None)
+        Compute the gas mass
+    update_mtot(*args, **kwargs)
+        Update the total halo mass using the compute_mtot() method
+    compute_mtot(mdm: float = None, mgas: float = None, gal_mgas: list[float] = None, gal_mstar: list[float] = None)
+        Compute new total halo mass based on the halo's DM and gas reservoirs
+        (mdm and mgas) as well as all contained galaxies' gas reservoirs (mgas)
+        and stellar masses (mstar). Those are time-integrated quantities
+        This ins NOT based on previous values of mtot, as this is just a summary value.
+    update_MIR(sMIR: float = None, *args, **kwargs)
+        Update the current dark matter mass increase rate
+    compute_MIR(mtot: float = None, sMIR: float = None)
+        Computes the current DARK MATTER Mass Increase Rate from sMIR
+    update_sMIR(sMIR_scaling_updater = None, *args, **kwargs)
+        Update the specific mass increase rate (of dark matter)
+    compute_sMIR(mtot: float = None, sMIR_scaling: float = None, z: float = None)
+        Computes the specific Mass Increase Rate of the DM halo
+        accoding to Lilly et al. 2013, Eq. (3), more precise version.
+        Modified to include an optional scaling factor to regulate
+        accretion rate on the halo in total, as well as an optional
+        update to this scaling factor
+    update_sMIR_scaling(*args, **kwargs)
+        Update the sMIR_scaling
+    compute_sMIR_scaling(updater_function)
+        Computes the updated sMIR_scaling using the function handed in
+        and the current environment instance
+
+
+
     create_Galaxy(galaxy_kwargs: dict = None)
         Creates Galaxy object and adds it to galaxies list
     reference_evolve(timestep: float = 1.e-3)
@@ -622,6 +672,11 @@ class Halo(AstroObject):
                     # BDR: float = None,
                     MIR: float  = None
                     ):
+        """
+        Computes the dark matter change rate - should be made obsolete since MIR is that now
+        :param MIR: specific mass increase rate (of dark matter only, actually)
+        :return: dark matter change rate - now the same as MIR
+        """
         # BDR = self.BDR if BDR is None else BDR
         MIR = self.MIR if MIR is None else MIR
 
@@ -642,6 +697,16 @@ class Halo(AstroObject):
                     HLF: float = None,
                     MIR: float  = None
                     ):
+        """
+        Computes the gas mass change rate
+
+        :param BDR: barion-dark matter ratio
+        :param gal_fgal: list of fractions of gas entering the halo that reaches the star-forming region of each galaxy
+        :param gal_MLR: list of mass loss rates of all individual galaxies in the halo
+        :param HLF: halo loss fraction
+        :param MIR: dark matter mass increase rate of the halo (not! specific MIR)
+        :return: GCR
+        """
         BDR = self.BDR if BDR is None else BDR
         HLF = self.HLF if HLF is None else HLF
         MIR = self.MIR if MIR is None else MIR
@@ -682,6 +747,14 @@ class Halo(AstroObject):
                     DCR: float = None,
                     mdm: float = None
                     ) -> float:
+        """
+        Compute the dark matter mass
+
+        :param timestep: timestep length
+        :param DCR: dark matter mass change rate (same as MIR now)
+        :param mdm: dark matter mass up until now
+        :return: the new, larger dark matter mass
+        """
         DCR = self.DCR if DCR is None else DCR
         mdm = self.mdm if mdm is None else mdm
 
@@ -701,6 +774,15 @@ class Halo(AstroObject):
                      GCR: float = None,
                      mgas: float = None,
                      ) -> float:
+        """
+        Compute the gas mass
+
+        :param timestep:
+        :param gal_MLR:
+        :param GCR:
+        :param mgas:
+        :return:
+        """
         GCR = self.GCR if GCR is None else GCR
         mgas = self.mgas if mgas is None else mgas
 
@@ -724,7 +806,7 @@ class Halo(AstroObject):
         """Compute new total halo mass based on the halo's DM and gas reservoirs
         (mdm and mgas) as well as all contained galaxies' gas reservoirs (mgas)
         and stellar masses (mstar). Those are time-integrated quantities
-        This ins NOT based on previous mtot, as this is just a summary value."""
+        This ins NOT based on previous values of mtot, as this is just a summary value."""
         mdm = self.mdm if mdm is None else mdm
         mgas = self.mgas if mgas is None else mgas
 
@@ -751,6 +833,7 @@ class Halo(AstroObject):
 
     # MIR
     def update_MIR(self, sMIR: float = None, *args, **kwargs) -> float:
+        """Update the current dark matter mass increase rate"""
         if sMIR is None:
             self.update_sMIR()
 
@@ -775,6 +858,7 @@ class Halo(AstroObject):
 
     # sMIR
     def update_sMIR(self, sMIR_scaling_updater = None, *args, **kwargs) -> float:
+        """Update the specific mass increase rate (of dark matter)"""
         # if necessary: update the sMIR_scaling prior to applying it in compute_sMIR()
         sMIR_scaling_updater = self.sMIR_scaling_updater if sMIR_scaling_updater is None else sMIR_scaling_updater
         if sMIR_scaling_updater is not None:
@@ -809,6 +893,7 @@ class Halo(AstroObject):
 
     # sMIR_scaling
     def update_sMIR_scaling(self, *args, **kwargs) -> float:
+        """Update the sMIR_scaling"""
         self.sMIR_scaling = self.compute_sMIR_scaling(*args, **kwargs)
         return self.sMIR_scaling
 
