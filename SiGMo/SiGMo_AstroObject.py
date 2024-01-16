@@ -68,7 +68,25 @@ def make_copy_exclude_items_by_class(in_dict, excl_class) -> dict:
 # Abstract Base Class for all AstroObjects (for Environment, Halo, Galaxy)
 
 class AstroObject(ABC):
-    """Abstract base class that just provides common attributes and methods for all different AstroObject subclasses"""
+    """
+    Abstract base class that just provides common attributes and methods for all different AstroObject subclasses
+
+    Methods
+    -------
+    evolve()
+        Abstract method that forces subclasses to implement their own 'evolve()' method
+    make_snapshot(single_snapshot: bool = True)
+        Returns the current values of all major attributes of this AstroObject as dict
+    make_single_snapshot()
+        Returns the current values of all major attributes as dict,
+        replaces instances of the subclasses of AstroObject by their name attribute.
+    make_multi_snapshot()
+        Returns the current values of all major attributes as dict, including lower-in-hierarchy objects, and
+        replaces instances of the higher-in-hierarchy subclasses of AstroObject by their name attribute
+    make_and_write_all_snapshots(index: int, n_steps: int, outdir: Path, single_snapshots: bool = True)
+        Writes snapshots of the Environment self and of all linked Halos and Galaxies to disk
+    """
+
     @abstractmethod
     def __init__(self):
         self.name = None
@@ -76,6 +94,10 @@ class AstroObject(ABC):
 
     @abstractmethod
     def evolve(self):
+        """
+        Abstract method that forces subclasses to implement their own 'evolve()' method
+        :return: None
+        """
         return
 
     def make_snapshot(self, single_snapshot: bool = True) -> 'Snapshot':
