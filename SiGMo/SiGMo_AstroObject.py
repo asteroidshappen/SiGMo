@@ -277,7 +277,7 @@ class Environment(AstroObject):
         The amount of gas available in the environment (default np.inf)
     name : str, optional
         The name of the galaxy (default 'Test_Env')
-    [previous: Snapshot, optional
+    [previous : Snapshot, optional
         A snapshot of the previous state (default None)] set automatically
     [z : float, optional
         The current redshift of the system (default None)] set automatically
@@ -437,7 +437,7 @@ class Halo(AstroObject):
         The dark matter mass change rate (accretion) of the halo (default None)
     [fgal : float, optional
         The fraction of baryons that enter the halo and make it all the way down
-        into the "regulator system" to participate in star formation etc] deprecated
+        into the "regulator system" to participate in star formation etc] moved to Galaxy class
     galaxies : list, optional
         List of all Galaxy objects in this environment (default None)
     GCR: float, optional
@@ -470,7 +470,8 @@ class Halo(AstroObject):
         If sMIR_scaling_updater is a function, it will be called, with only the
         current instance of the halo as an argument, from which all other information
         like redshift etc. needs to be derived (default None)
-    uRandDraw : constant drawn from a uniform random distribution, to be used e.g. for unique offsets (default None)
+    uRandDraw : float, optional
+        constant drawn from a uniform random distribution, to be used e.g. for unique offsets (default None)
     z : float, optional
         The current redshift of the system (default None)
     [zstart : float, optional
